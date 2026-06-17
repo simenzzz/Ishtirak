@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ishtirak.dev/events/invoice-issued.schema.json",
+  "title": "InvoiceIssued",
+  "description": "Emitted by the billing run when an invoice is produced.",
+  "type": "object",
+  "required": ["eventId", "eventType", "operatorId", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "invoice.issued" },
+    "operatorId": { "type": "string", "format": "uuid" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["invoiceId", "subscriberId", "periodStart", "periodEnd", "amountUsd", "kwhConsumed"],
+      "additionalProperties": false,
+      "properties": {
+        "invoiceId": { "type": "string", "format": "uuid" },
+        "subscriberId": { "type": "string", "format": "uuid" },
+        "periodStart": { "type": "string", "format": "date" },
+        "periodEnd": { "type": "string", "format": "date" },
+        "amountUsd": { "type": "number", "minimum": 0 },
+        "kwhConsumed": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

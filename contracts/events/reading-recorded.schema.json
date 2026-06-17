@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ishtirak.dev/events/reading-recorded.schema.json",
+  "title": "ReadingRecorded",
+  "description": "Emitted when a meter reading is ingested by core-java.",
+  "type": "object",
+  "required": ["eventId", "eventType", "operatorId", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "reading.recorded" },
+    "operatorId": { "type": "string", "format": "uuid" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["readingId", "subscriberId", "kwh", "readingAt"],
+      "additionalProperties": false,
+      "properties": {
+        "readingId": { "type": "string", "format": "uuid" },
+        "subscriberId": { "type": "string", "format": "uuid" },
+        "kwh": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Cumulative meter value in kWh at readingAt."
+        },
+        "readingAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

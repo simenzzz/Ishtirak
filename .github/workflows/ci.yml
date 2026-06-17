@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core-java:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/core-java
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - run: mvn -B verify
+
+  analytics-python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/analytics-python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest
+
+  gateway-node:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/gateway-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npx tsc -p tsconfig.json --noEmit
+      - run: npm test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run build
+      - run: npm test
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Pinned for reproducible lint results and to avoid executing an
+      # unvetted newest release on every CI run (supply-chain hygiene).
+      - name: Lint OpenAPI specs
+        run: npx --yes @redocly/cli@2.34.0 lint --config contracts/redocly.yaml contracts/openapi/*.openapi.yaml
+      - name: Validate AsyncAPI spec
+        run: npx --yes @asyncapi/cli@6.0.2 validate contracts/asyncapi.yaml

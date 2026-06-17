@@ -1,0 +1,5 @@
+# Redocly config for the OpenAPI specs in contracts/openapi/.
+# Used by the `contracts` CI job: `redocly lint --config contracts/redocly.yaml`.
+rules:
+  # Health/readiness/actuator probes intentionally have no 4xx response.
+  operation-4xx-response: off

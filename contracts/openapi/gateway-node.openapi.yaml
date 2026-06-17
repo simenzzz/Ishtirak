@@ -1,0 +1,619 @@
+openapi: 3.1.0
+info:
+  title: Ishtirak gateway (public BFF)
+  version: 0.1.0
+  description: >
+    The public API the web client consumes (ADR-003). The gateway authenticates
+    every request (Bearer JWT), derives operatorId + role from the token, and
+    aggregates/proxies to the internal core-java and analytics-python services.
+    All resources are implicitly scoped to the caller's operator — clients never
+    pass operatorId.
+
+
+    The real-time channel (`GET /api/ws`, WebSocket upgrade) is **not** modeled
+    in OpenAPI; its protocol lives in ../asyncapi.yaml and ../../docs/API.md.
+
+
+    **Design-ahead-of-implementation:** only `/health` and `/ready` are built
+    today (`x-status: built`); everything else is `x-status: planned`.
+  contact: { name: Ishtirak, url: https://ishtirak.dev }
+servers:
+  - url: http://localhost:8080
+    description: Local / docker-compose (public)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - { name: auth }
+  - { name: subscribers }
+  - { name: tiers }
+  - { name: readings }
+  - { name: billing }
+  - { name: payments }
+  - { name: outages }
+  - { name: analytics }
+  - { name: health }
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Exchange credentials for a JWT
+      description: >
+        Rate-limited (brute-force / credential-stuffing protection). The
+        `password` field MUST never be logged (the gateway uses pino-http
+        request logging — redact this body).
+      x-status: planned
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password:
+                  type: string
+                  format: password
+                  description: Never logged or echoed back.
+      responses:
+        '200':
+          description: Authenticated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [accessToken, refreshToken]
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: 'components.yaml#/components/responses/TooManyRequests' }
+
+  /api/auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshToken
+      summary: Refresh an access token
+      description: >
+        Refresh tokens are single-use and rotated on each refresh; detecting reuse
+        of a consumed token revokes the token family (theft mitigation).
+        Rate-limited.
+      x-status: planned
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New access token (and rotated refresh token).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [accessToken]
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: 'components.yaml#/components/responses/TooManyRequests' }
+
+  /api/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: Current identity (operator, role)
+      x-status: planned
+      responses:
+        '200':
+          description: The authenticated identity.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [operatorId, role]
+                properties:
+                  operatorId: { type: string, format: uuid }
+                  subscriberId: { type: string, format: uuid, description: Present when the caller is a SUBSCRIBER. }
+                  role: { type: string, enum: [OPERATOR_ADMIN, OPERATOR_STAFF, SUBSCRIBER] }
+                  name: { type: string }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+
+  /api/subscribers:
+    get:
+      tags: [subscribers]
+      operationId: apiListSubscribers
+      summary: List subscribers (paginated)
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      parameters:
+        - $ref: 'components.yaml#/components/parameters/pageParam'
+        - $ref: 'components.yaml#/components/parameters/limitParam'
+      responses:
+        '200':
+          description: Page of subscribers.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/Subscriber' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+    post:
+      tags: [subscribers]
+      operationId: apiCreateSubscriber
+      summary: Create a subscriber
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, tierId]
+              properties:
+                name: { type: string }
+                tierId: { type: string, format: uuid }
+                meterId: { type: string }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Subscriber' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/subscribers/{id}:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    get:
+      tags: [subscribers]
+      operationId: apiGetSubscriber
+      summary: Get a subscriber
+      x-status: planned
+      x-authorization: >
+        OPERATOR_ADMIN/STAFF: any subscriber in the operator. SUBSCRIBER: only
+        when {id} == caller's own subscriberId, else 404. `meterId` is
+        operator-staff-only output.
+      responses:
+        '200':
+          description: Subscriber.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Subscriber' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+    patch:
+      tags: [subscribers]
+      operationId: apiUpdateSubscriber
+      summary: Update a subscriber
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string }
+                tierId: { type: string, format: uuid }
+                status: { type: string, enum: [ACTIVE, INACTIVE] }
+      responses:
+        '200':
+          description: Updated subscriber.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Subscriber' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/subscribers/{id}/readings:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+      - $ref: 'components.yaml#/components/parameters/pageParam'
+      - $ref: 'components.yaml#/components/parameters/limitParam'
+    get:
+      tags: [readings]
+      operationId: apiListSubscriberReadings
+      summary: Reading history for a subscriber
+      x-status: planned
+      x-authorization: >
+        OPERATOR_ADMIN/STAFF: any subscriber in the operator. SUBSCRIBER: only
+        own readings ({id} == caller's subscriberId), else 404.
+      responses:
+        '200':
+          description: Page of readings.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/Reading' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/tiers:
+    get:
+      tags: [tiers]
+      operationId: apiListTiers
+      summary: List amperage tiers
+      x-status: planned
+      responses:
+        '200':
+          description: Tiers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/Tier' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+
+  /api/readings:
+    post:
+      tags: [readings]
+      operationId: apiRecordReading
+      summary: Record a meter reading
+      description: Proxies to core-java, which emits `reading.recorded`.
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [subscriberId, kwh, readingAt]
+              properties:
+                subscriberId: { type: string, format: uuid }
+                kwh: { type: number, minimum: 0 }
+                readingAt: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Recorded reading.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Reading' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/billing-runs:
+    post:
+      tags: [billing]
+      operationId: apiRunBilling
+      summary: Trigger the monthly billing run
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [periodStart, periodEnd]
+              properties:
+                periodStart: { type: string, format: date }
+                periodEnd: { type: string, format: date }
+      responses:
+        '202':
+          description: Billing run accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [issued, periodStart, periodEnd]
+                properties:
+                  issued: { type: integer, minimum: 0 }
+                  periodStart: { type: string, format: date }
+                  periodEnd: { type: string, format: date }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '409': { $ref: 'components.yaml#/components/responses/Conflict' }
+
+  /api/invoices:
+    get:
+      tags: [billing]
+      operationId: apiListInvoices
+      summary: List invoices
+      x-status: planned
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID] } }
+        - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
+        - { name: periodEnd, in: query, required: false, schema: { type: string, format: date } }
+        - $ref: 'components.yaml#/components/parameters/pageParam'
+        - $ref: 'components.yaml#/components/parameters/limitParam'
+      responses:
+        '200':
+          description: Page of invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/Invoice' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/invoices/{id}:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    get:
+      tags: [billing]
+      operationId: apiGetInvoice
+      summary: Get an invoice
+      x-status: planned
+      x-authorization: >
+        OPERATOR_ADMIN/STAFF: any invoice in the operator. SUBSCRIBER: only own
+        invoices (invoice.subscriberId == caller's subscriberId), else 404.
+      responses:
+        '200':
+          description: Invoice.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Invoice' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/invoices/{id}/payments:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    get:
+      tags: [payments]
+      operationId: apiListInvoicePayments
+      summary: Payments recorded against an invoice
+      x-status: planned
+      x-authorization: >
+        OPERATOR_ADMIN/STAFF: any invoice in the operator. SUBSCRIBER: only own
+        invoice's payments, else 404.
+      responses:
+        '200':
+          description: Payments for the invoice.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/Payment' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/me/invoices:
+    get:
+      tags: [billing]
+      operationId: apiListMyInvoices
+      summary: The caller's own invoices (subscriber portal)
+      x-status: planned
+      parameters:
+        - $ref: 'components.yaml#/components/parameters/pageParam'
+        - $ref: 'components.yaml#/components/parameters/limitParam'
+      responses:
+        '200':
+          description: Page of the subscriber's invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/Invoice' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+
+  /api/payments:
+    post:
+      tags: [payments]
+      operationId: apiRecordPayment
+      summary: Record a payment against an invoice
+      description: Proxies to core-java, which emits `payment.received`.
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [invoiceId, amountUsd, method]
+              properties:
+                invoiceId: { type: string, format: uuid }
+                amountUsd: { type: number, minimum: 0 }
+                method: { type: string, enum: [CASH, WHISH] }
+      responses:
+        '201':
+          description: Recorded payment.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Payment' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/outages:
+    get:
+      tags: [outages]
+      operationId: apiListOutages
+      summary: Scheduled / active outages (operator or subscriber view)
+      x-status: planned
+      responses:
+        '200':
+          description: Outages.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/Outage' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+    post:
+      tags: [outages]
+      operationId: apiScheduleOutage
+      summary: Schedule a load-shedding window
+      description: Proxies to core-java, which emits `outage.scheduled`.
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [startsAt, endsAt, reason]
+              properties:
+                startsAt: { type: string, format: date-time }
+                endsAt: { type: string, format: date-time }
+                reason: { type: string, enum: [FUEL, MAINTENANCE, GRID, OTHER] }
+      responses:
+        '201':
+          description: Scheduled outage.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Outage' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/analytics/collection-rate:
+    get:
+      tags: [analytics]
+      operationId: apiCollectionRate
+      summary: Collection-rate summary
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      parameters:
+        - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
+        - { name: periodEnd, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Collection rate per period.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/CollectionRate' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/analytics/risk:
+    get:
+      tags: [analytics]
+      operationId: apiRiskFlags
+      summary: Tampering risk flags
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      parameters:
+        - { name: subscriberId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: minScore, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
+        - $ref: 'components.yaml#/components/parameters/pageParam'
+        - $ref: 'components.yaml#/components/parameters/limitParam'
+      responses:
+        '200':
+          description: Page of risk flags.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/RiskFlag' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /health:
+    get:
+      tags: [health]
+      operationId: gatewayHealth
+      summary: Liveness
+      x-status: built
+      security: []
+      responses:
+        '200':
+          description: Service is alive.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/HealthStatus' }
+
+  /ready:
+    get:
+      tags: [health]
+      operationId: gatewayReady
+      summary: Readiness
+      x-status: built
+      security: []
+      responses:
+        '200':
+          description: Service is ready.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/ReadyStatus' }
+        '503':
+          description: Service not ready.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/ReadyStatus' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: 'components.yaml#/components/securitySchemes/bearerAuth'

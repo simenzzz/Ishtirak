@@ -1,0 +1,383 @@
+asyncapi: 3.1.0
+info:
+  title: Ishtirak async API
+  version: 0.1.0
+  description: >
+    The asynchronous integration surface: the RabbitMQ topic exchange
+    `ishtirak.events` (domain events, ADR-002) and the gateway WebSocket
+    protocol (real-time pushes, ADR-003). Domain event payloads reuse the JSON
+    Schemas in ./events/*.schema.json (the source of truth). Companion prose:
+    ../docs/API.md and ../docs/SYSTEM_DESIGN.md.
+
+
+    **Multi-tenant invariant:** every consumer MUST scope derived state and
+    fan-out by the envelope `operatorId` and MUST NOT treat a bare `payload` in
+    isolation. WebSocket server-to-client messages omit `operatorId` by design —
+    their tenant correctness depends entirely on the per-socket binding
+    `(operatorId, subscriberId, role)` (see `clientSubscribe`); a socket bound to
+    operator X must never receive a message derived from operator Y.
+
+
+    **Design-ahead-of-implementation:** the broker topology and schemas are
+    defined; producers/consumers are wired in Phases 2–4 (`x-status: planned`).
+  contact: { name: Ishtirak, url: https://ishtirak.dev }
+
+servers:
+  rabbitmq:
+    host: localhost:5672
+    protocol: amqp
+    description: RabbitMQ broker; topic exchange `ishtirak.events`.
+  websocket:
+    host: localhost:8080
+    pathname: /api/ws
+    protocol: ws
+    description: Gateway WebSocket endpoint (JWT-authenticated on upgrade).
+
+defaultContentType: application/json
+
+channels:
+  readingRecorded:
+    address: reading.recorded
+    description: A meter reading was ingested by core-java.
+    messages:
+      readingRecorded: { $ref: '#/components/messages/ReadingRecorded' }
+    bindings: { $ref: '#/components/channelBindings/topicEvent' }
+  invoiceIssued:
+    address: invoice.issued
+    description: The billing run produced an invoice.
+    messages:
+      invoiceIssued: { $ref: '#/components/messages/InvoiceIssued' }
+    bindings: { $ref: '#/components/channelBindings/topicEvent' }
+  paymentReceived:
+    address: payment.received
+    description: A payment was recorded against an invoice.
+    messages:
+      paymentReceived: { $ref: '#/components/messages/PaymentReceived' }
+    bindings: { $ref: '#/components/channelBindings/topicEvent' }
+  outageScheduled:
+    address: outage.scheduled
+    description: An operator scheduled a load-shedding window.
+    messages:
+      outageScheduled: { $ref: '#/components/messages/OutageScheduled' }
+    bindings: { $ref: '#/components/channelBindings/topicEvent' }
+  readingFlagged:
+    address: reading.flagged
+    description: >
+      Internal risk signal emitted by analytics-python when a reading is flagged
+      as possible tampering. Unlike the four core domain events (published by
+      core-java), this is published by analytics-python and consumed by the
+      gateway to drive the `tampering.alert` WebSocket push.
+    messages:
+      readingFlagged: { $ref: '#/components/messages/ReadingFlagged' }
+    bindings: { $ref: '#/components/channelBindings/topicEvent' }
+
+  # --- WebSocket (gateway <-> browser) --------------------------------------
+  wsServerToClient:
+    address: /api/ws
+    description: Server-to-client real-time messages, fanned out by operator/subscriber.
+    servers:
+      - { $ref: '#/servers/websocket' }
+    messages:
+      outageCountdown: { $ref: '#/components/messages/OutageCountdown' }
+      invoiceReady: { $ref: '#/components/messages/InvoiceReady' }
+      tamperingAlert: { $ref: '#/components/messages/TamperingAlert' }
+      unauthorized: { $ref: '#/components/messages/Unauthorized' }
+      pong: { $ref: '#/components/messages/Pong' }
+  wsClientToServer:
+    address: /api/ws
+    description: Client-to-server control messages.
+    servers:
+      - { $ref: '#/servers/websocket' }
+    messages:
+      subscribe: { $ref: '#/components/messages/Subscribe' }
+      ping: { $ref: '#/components/messages/Ping' }
+
+operations:
+  # --- producers (core-java) ----
+  coreSendReadingRecorded:
+    action: send
+    x-status: planned
+    x-emitted-by: core-java
+    channel: { $ref: '#/channels/readingRecorded' }
+    summary: core-java publishes after a reading is committed.
+  coreSendInvoiceIssued:
+    action: send
+    x-status: planned
+    x-emitted-by: core-java
+    channel: { $ref: '#/channels/invoiceIssued' }
+    summary: core-java publishes one per invoice during the billing run.
+  coreSendPaymentReceived:
+    action: send
+    x-status: planned
+    x-emitted-by: core-java
+    channel: { $ref: '#/channels/paymentReceived' }
+    summary: core-java publishes after a payment is committed.
+  coreSendOutageScheduled:
+    action: send
+    x-status: planned
+    x-emitted-by: core-java
+    channel: { $ref: '#/channels/outageScheduled' }
+    summary: core-java publishes after an outage is committed.
+
+  # --- consumers ----
+  analyticsReceiveReadingRecorded:
+    action: receive
+    x-status: planned
+    x-consumed-by: analytics-python
+    x-queue: analytics.reading-recorded
+    channel: { $ref: '#/channels/readingRecorded' }
+    summary: analytics-python scores the reading for tampering and captures it.
+  analyticsReceiveInvoiceIssued:
+    action: receive
+    x-status: planned
+    x-consumed-by: analytics-python
+    channel: { $ref: '#/channels/invoiceIssued' }
+    summary: analytics-python updates the collection-rate summary.
+  analyticsReceivePaymentReceived:
+    action: receive
+    x-status: planned
+    x-consumed-by: analytics-python
+    channel: { $ref: '#/channels/paymentReceived' }
+    summary: analytics-python updates the collection-rate summary.
+  gatewayReceiveInvoiceIssued:
+    action: receive
+    x-status: planned
+    x-consumed-by: gateway-node
+    channel: { $ref: '#/channels/invoiceIssued' }
+    summary: gateway-node pushes a "bill ready" message to the subscriber.
+  gatewayReceiveOutageScheduled:
+    action: receive
+    x-status: planned
+    x-consumed-by: gateway-node
+    channel: { $ref: '#/channels/outageScheduled' }
+    summary: gateway-node streams a live countdown to affected subscribers.
+  analyticsSendReadingFlagged:
+    action: send
+    x-status: planned
+    x-emitted-by: analytics-python
+    channel: { $ref: '#/channels/readingFlagged' }
+    summary: analytics-python publishes a risk signal when a reading is flagged.
+  gatewayReceiveReadingFlagged:
+    action: receive
+    x-status: planned
+    x-consumed-by: gateway-node
+    channel: { $ref: '#/channels/readingFlagged' }
+    summary: >
+      gateway-node consumes the risk signal and pushes `tampering.alert` to the
+      operator (the inbound source for the gatewaySendTamperingAlert WS op).
+
+  # --- WebSocket ----
+  gatewaySendOutageCountdown:
+    action: send
+    x-status: planned
+    x-emitted-by: gateway-node
+    channel: { $ref: '#/channels/wsServerToClient' }
+    messages:
+      - { $ref: '#/channels/wsServerToClient/messages/outageCountdown' }
+    summary: Live outage countdown tick to a subscriber.
+  gatewaySendInvoiceReady:
+    action: send
+    x-status: planned
+    x-emitted-by: gateway-node
+    channel: { $ref: '#/channels/wsServerToClient' }
+    messages:
+      - { $ref: '#/channels/wsServerToClient/messages/invoiceReady' }
+    summary: Bill-ready push to a subscriber.
+  gatewaySendTamperingAlert:
+    action: send
+    x-status: planned
+    x-emitted-by: gateway-node
+    channel: { $ref: '#/channels/wsServerToClient' }
+    messages:
+      - { $ref: '#/channels/wsServerToClient/messages/tamperingAlert' }
+    summary: Tampering alert push to an operator.
+  clientSubscribe:
+    action: receive
+    x-status: planned
+    channel: { $ref: '#/channels/wsClientToServer' }
+    messages:
+      - { $ref: '#/channels/wsClientToServer/messages/subscribe' }
+    summary: Client opts into channels permitted for its role.
+    description: >
+      Channel→role matrix (server-enforced, NOT trusted from the client):
+      `alerts` → OPERATOR_ADMIN/STAFF only; `invoices` and `outages` → that
+      subscriber's own data only. The server validates each requested channel
+      against the socket's bound `(operatorId, subscriberId, role)` and replies
+      with an `unauthorized` message for any disallowed channel. Fan-out of every
+      server-to-client message is filtered by the socket binding — never by the
+      client's requested channel alone — so a socket bound to operator X can
+      never receive a message derived from operator Y.
+
+components:
+  channelBindings:
+    topicEvent:
+      amqp:
+        is: routingKey
+        exchange:
+          name: ishtirak.events
+          type: topic
+          durable: true
+          vhost: /
+        bindingVersion: 0.3.0
+
+  messages:
+    ReadingRecorded:
+      name: ReadingRecorded
+      title: reading.recorded
+      contentType: application/json
+      summary: Emitted when a meter reading is ingested.
+      payload:
+        $ref: './events/reading-recorded.schema.json'
+    InvoiceIssued:
+      name: InvoiceIssued
+      title: invoice.issued
+      contentType: application/json
+      summary: Emitted when the billing run produces an invoice.
+      payload:
+        $ref: './events/invoice-issued.schema.json'
+    PaymentReceived:
+      name: PaymentReceived
+      title: payment.received
+      contentType: application/json
+      summary: Emitted when a payment is recorded.
+      payload:
+        $ref: './events/payment-received.schema.json'
+    OutageScheduled:
+      name: OutageScheduled
+      title: outage.scheduled
+      contentType: application/json
+      summary: Emitted when an operator schedules a load-shedding window.
+      payload:
+        $ref: './events/outage-scheduled.schema.json'
+    ReadingFlagged:
+      name: ReadingFlagged
+      title: reading.flagged
+      contentType: application/json
+      summary: Internal risk signal (analytics-python → gateway-node).
+      payload:
+        type: object
+        additionalProperties: false
+        required: [eventId, eventType, operatorId, occurredAt, payload]
+        properties:
+          eventId: { type: string, format: uuid }
+          eventType: { type: string, const: reading.flagged }
+          operatorId: { type: string, format: uuid }
+          occurredAt: { type: string, format: date-time }
+          payload:
+            type: object
+            additionalProperties: false
+            required: [readingId, subscriberId, reason, score]
+            properties:
+              readingId: { type: string, format: uuid }
+              subscriberId: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [NEGATIVE_DELTA, ZERO_DELTA, DROP_GT_THRESHOLD, EXCEEDS_TIER_CAP, ML_ANOMALY]
+              score: { type: number, minimum: 0, maximum: 1 }
+
+    # --- WebSocket message envelopes (type/data/ts) ---
+    OutageCountdown:
+      name: OutageCountdown
+      title: outage.countdown
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, data, ts]
+        properties:
+          type: { type: string, const: outage.countdown }
+          ts: { type: string, format: date-time }
+          data:
+            type: object
+            required: [outageId, startsAt, endsAt, secondsRemaining]
+            properties:
+              outageId: { type: string, format: uuid }
+              startsAt: { type: string, format: date-time }
+              endsAt: { type: string, format: date-time }
+              secondsRemaining: { type: integer, minimum: 0 }
+    InvoiceReady:
+      name: InvoiceReady
+      title: invoice.ready
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, data, ts]
+        properties:
+          type: { type: string, const: invoice.ready }
+          ts: { type: string, format: date-time }
+          data:
+            type: object
+            required: [invoiceId, amountUsd, periodEnd]
+            properties:
+              invoiceId: { type: string, format: uuid }
+              amountUsd: { type: number, minimum: 0 }
+              periodEnd: { type: string, format: date }
+    TamperingAlert:
+      name: TamperingAlert
+      title: tampering.alert
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, data, ts]
+        properties:
+          type: { type: string, const: tampering.alert }
+          ts: { type: string, format: date-time }
+          data:
+            type: object
+            required: [subscriberId, readingId, reason, score]
+            properties:
+              subscriberId: { type: string, format: uuid }
+              readingId: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [NEGATIVE_DELTA, ZERO_DELTA, DROP_GT_THRESHOLD, EXCEEDS_TIER_CAP, ML_ANOMALY]
+              score: { type: number, minimum: 0, maximum: 1 }
+    Subscribe:
+      name: Subscribe
+      title: subscribe
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { type: string, const: subscribe }
+          data:
+            type: object
+            required: [channels]
+            properties:
+              channels:
+                type: array
+                items: { type: string, enum: [outages, invoices, alerts] }
+    Ping:
+      name: Ping
+      title: ping
+      contentType: application/json
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { type: string, const: ping }
+    Pong:
+      name: Pong
+      title: pong
+      contentType: application/json
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { type: string, const: pong }
+    Unauthorized:
+      name: Unauthorized
+      title: unauthorized
+      contentType: application/json
+      summary: Sent when a client subscribes to a channel its role may not access.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { type: string, const: unauthorized }
+          data:
+            type: object
+            required: [channel, reason]
+            properties:
+              channel: { type: string, enum: [outages, invoices, alerts] }
+              reason: { type: string }

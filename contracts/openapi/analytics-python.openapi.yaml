@@ -1,0 +1,199 @@
+openapi: 3.1.0
+info:
+  title: Ishtirak analytics-python
+  version: 0.1.0
+  description: >
+    Internal analytics REST API. Read-only views derived from the event stream
+    (no domain mutations). Also runs a RabbitMQ consumer bound to
+    `reading.recorded` (queue `analytics.reading-recorded`) — described in
+    ../asyncapi.yaml, not here. Consumed by the gateway, not exposed to the
+    browser.
+
+
+    **Internal trust boundary (ADR-003).** Not browser-reachable (`x-internal`).
+    Accepts a gateway-signed service token (`gatewayServiceAuth`), never the raw
+    end-user JWT; the end-user identity arrives as the gateway-injected trusted
+    headers `X-Operator-Id` + `X-Actor-Role`. Risk/tampering data is operator-only
+    intelligence — every read MUST resolve `subscriberId`/`readingId` within
+    `X-Operator-Id` and reject SUBSCRIBER role.
+
+
+    **Design-ahead-of-implementation:** only `/health` and `/ready` are built
+    today (`x-status: built`); everything else is `x-status: planned`.
+    Companion: ../../docs/API.md.
+  contact: { name: Ishtirak, url: https://ishtirak.dev }
+servers:
+  - url: http://localhost:8082
+    description: Local / docker-compose (internal — not exposed to the browser)
+    x-internal: true
+
+security:
+  - gatewayServiceAuth: []
+
+tags:
+  - { name: analytics }
+  - { name: health }
+
+paths:
+  /analytics/collection-rate:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/operatorIdHeader'
+      - $ref: 'components.yaml#/components/parameters/actorRoleHeader'
+    get:
+      tags: [analytics]
+      operationId: getCollectionRate
+      summary: Collection-rate summary (paid vs. issued)
+      description: Derived from `invoice.issued` + `payment.received`.
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      parameters:
+        - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
+        - { name: periodEnd, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Collection rate per period.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/CollectionRate' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /analytics/risk:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/operatorIdHeader'
+      - $ref: 'components.yaml#/components/parameters/actorRoleHeader'
+    get:
+      tags: [analytics]
+      operationId: listRiskFlags
+      summary: Tampering risk flags
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      parameters:
+        - { name: subscriberId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: minScore, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
+        - $ref: 'components.yaml#/components/parameters/pageParam'
+        - $ref: 'components.yaml#/components/parameters/limitParam'
+      responses:
+        '200':
+          description: Page of risk flags.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/RiskFlag' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /analytics/risk/{readingId}:
+    parameters:
+      - name: readingId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: 'components.yaml#/components/parameters/operatorIdHeader'
+      - $ref: 'components.yaml#/components/parameters/actorRoleHeader'
+    get:
+      tags: [analytics]
+      operationId: getRiskFlag
+      summary: Risk detail for a single reading
+      description: Resolves readingId within X-Operator-Id; 404 if outside the tenant.
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      responses:
+        '200':
+          description: Risk flag.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/RiskFlag' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+    # See POST .../label below for operator feedback.
+
+  /analytics/risk/{readingId}/label:
+    parameters:
+      - name: readingId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: 'components.yaml#/components/parameters/operatorIdHeader'
+      - $ref: 'components.yaml#/components/parameters/actorRoleHeader'
+    post:
+      tags: [analytics]
+      operationId: labelRiskFlag
+      summary: Operator confirm/dismiss (training label)
+      description: >
+        Records operator feedback on a flag. The label feeds the post-deployment
+        continuous-learning loop (ADR-007) — it does not retrain the live model
+        synchronously. Operator-only write, scoped to X-Operator-Id.
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [label]
+              properties:
+                label:
+                  type: string
+                  enum: [CONFIRMED, DISMISSED]
+                  description: >
+                    Operator may only set CONFIRMED or DISMISSED; UNREVIEWED is
+                    the system default (see RiskFlag.label).
+      responses:
+        '200':
+          description: Updated risk flag with the new label.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/RiskFlag' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /health:
+    get:
+      tags: [health]
+      operationId: analyticsHealth
+      summary: Liveness
+      x-status: built
+      security: []
+      responses:
+        '200':
+          description: Service is alive.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/HealthStatus' }
+
+  /ready:
+    get:
+      tags: [health]
+      operationId: analyticsReady
+      summary: Readiness
+      x-status: built
+      security: []
+      responses:
+        '200':
+          description: Service is ready.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/ReadyStatus' }
+        '503':
+          description: Service not ready.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/ReadyStatus' }
+
+components:
+  securitySchemes:
+    gatewayServiceAuth:
+      $ref: 'components.yaml#/components/securitySchemes/gatewayServiceAuth'

@@ -1,0 +1,263 @@
+# Shared OpenAPI 3.1 components, $ref'd by the three service specs in this
+# directory. Not a standalone API document (no paths) — it is a component
+# library only. Domain schemas are kept consistent with the event payloads in
+# ../events/*.schema.json (the source of truth); where a field set matches an
+# event payload exactly, prefer $ref'ing that payload over redefining it.
+#
+# Status: design-ahead-of-implementation. See ../README.md and ../../docs/API.md.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        End-user JWT issued by core-java and verified by the **gateway** (ADR-003).
+        The gateway derives operatorId + role from the token and forwards the
+        identity inward via trusted headers (see `operatorIdHeader` /
+        `actorRoleHeader`); clients never pass operatorId. This scheme is for the
+        public gateway only — internal services use `gatewayServiceAuth`.
+    gatewayServiceAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        **Internal trust boundary.** core-java and analytics-python accept only a
+        short-lived, gateway-signed *service* token here — NOT the raw browser
+        JWT. The end-user identity is propagated as the trusted `X-Operator-Id` /
+        `X-Actor-Role` headers the gateway injects. Internal ports must not be
+        reachable from the browser (servers are marked `x-internal`). Every
+        internal query MUST filter by `X-Operator-Id`.
+
+  parameters:
+    pageParam:
+      name: page
+      in: query
+      required: false
+      description: 1-based page number.
+      schema: { type: integer, minimum: 1, default: 1 }
+    limitParam:
+      name: limit
+      in: query
+      required: false
+      description: Page size.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    idParam:
+      name: id
+      in: path
+      required: true
+      description: Resource identifier (UUID).
+      schema: { type: string, format: uuid }
+    # Gateway-injected trusted identity headers for internal services (see
+    # gatewayServiceAuth). The gateway sets these from the verified end-user JWT;
+    # internal services MUST trust them and reject requests that lack them.
+    operatorIdHeader:
+      name: X-Operator-Id
+      in: header
+      required: true
+      description: Tenant the request is scoped to, injected by the gateway.
+      schema: { type: string, format: uuid }
+    actorRoleHeader:
+      name: X-Actor-Role
+      in: header
+      required: true
+      description: Authenticated end-user role, injected by the gateway.
+      schema: { type: string, enum: [OPERATOR_ADMIN, OPERATOR_STAFF, SUBSCRIBER] }
+
+  schemas:
+    # --- cross-cutting ----------------------------------------------------
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable error code.
+              examples: [VALIDATION_ERROR, NOT_FOUND, CONFLICT]
+            message:
+              type: string
+              description: Human-readable summary (never leaks secrets/internal detail).
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  field: { type: string }
+                  issue:
+                    type: string
+                    description: >
+                      Stable, user-safe validation message. MUST NOT contain
+                      exception text, stack traces, SQL, or internal identifiers.
+      examples:
+        - error:
+            code: VALIDATION_ERROR
+            message: kwh must be >= 0
+            details: [{ field: kwh, issue: "must be >= 0" }]
+
+    PageMeta:
+      type: object
+      additionalProperties: false
+      required: [total, page, limit]
+      properties:
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+
+    # --- domain -----------------------------------------------------------
+    # Fields mirror ../events/*.schema.json payloads (event uses readingId etc.;
+    # the entity exposes the same value as `id`).
+    Tier:
+      type: object
+      additionalProperties: false
+      required: [id, name, amperage, standingFeeUsd, perKwhRateUsd]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, examples: ["10A"] }
+        amperage: { type: integer, minimum: 1, description: Amperage cap in amps. }
+        standingFeeUsd: { type: number, minimum: 0, description: Flat monthly subscription fee. }
+        perKwhRateUsd: { type: number, minimum: 0, description: Metered rate per kWh. }
+
+    Subscriber:
+      type: object
+      additionalProperties: false
+      required: [id, name, tierId, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        tierId: { type: string, format: uuid }
+        meterId: { type: string, description: Physical meter identifier. }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        createdAt: { type: string, format: date-time }
+
+    Reading:
+      type: object
+      additionalProperties: false
+      required: [id, subscriberId, kwh, readingAt]
+      properties:
+        id: { type: string, format: uuid }
+        subscriberId: { type: string, format: uuid }
+        kwh:
+          type: number
+          minimum: 0
+          description: Cumulative meter value in kWh at readingAt.
+        readingAt: { type: string, format: date-time }
+
+    Invoice:
+      type: object
+      additionalProperties: false
+      required: [id, subscriberId, periodStart, periodEnd, amountUsd, kwhConsumed, status]
+      properties:
+        id: { type: string, format: uuid }
+        subscriberId: { type: string, format: uuid }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        amountUsd: { type: number, minimum: 0 }
+        kwhConsumed: { type: number, minimum: 0 }
+        status: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID] }
+        issuedAt: { type: string, format: date-time }
+
+    Payment:
+      type: object
+      additionalProperties: false
+      required: [id, invoiceId, subscriberId, amountUsd, method]
+      properties:
+        id: { type: string, format: uuid }
+        invoiceId: { type: string, format: uuid }
+        subscriberId: { type: string, format: uuid }
+        amountUsd: { type: number, minimum: 0 }
+        method: { type: string, enum: [CASH, WHISH] }
+        receivedAt: { type: string, format: date-time }
+
+    Outage:
+      type: object
+      additionalProperties: false
+      required: [id, startsAt, endsAt, reason]
+      properties:
+        id: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        reason: { type: string, enum: [FUEL, MAINTENANCE, GRID, OTHER] }
+        createdAt: { type: string, format: date-time }
+
+    # --- analytics --------------------------------------------------------
+    RiskFlag:
+      type: object
+      additionalProperties: false
+      required: [readingId, subscriberId, score, reason]
+      properties:
+        readingId: { type: string, format: uuid }
+        subscriberId: { type: string, format: uuid }
+        score: { type: number, minimum: 0, maximum: 1, description: 'Risk score in [0,1].' }
+        reason:
+          type: string
+          enum: [NEGATIVE_DELTA, ZERO_DELTA, DROP_GT_THRESHOLD, EXCEEDS_TIER_CAP, ML_ANOMALY]
+        label:
+          type: string
+          enum: [UNREVIEWED, CONFIRMED, DISMISSED]
+          description: Operator feedback used as a training label (post-deployment loop).
+        scoredAt: { type: string, format: date-time }
+
+    CollectionRate:
+      type: object
+      additionalProperties: false
+      required: [periodStart, periodEnd, issuedUsd, collectedUsd, rate]
+      properties:
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        issuedUsd: { type: number, minimum: 0 }
+        collectedUsd: { type: number, minimum: 0 }
+        rate: { type: number, minimum: 0, maximum: 1, description: collectedUsd / issuedUsd. }
+
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok] }
+
+    ReadyStatus:
+      type: object
+      additionalProperties: false
+      required: [ready]
+      properties:
+        ready: { type: boolean }
+
+  responses:
+    BadRequest:
+      description: Validation error.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated but not permitted (wrong role / cross-tenant).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found within the caller's operator scope.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Conflict (e.g. duplicate invoice for subscriber+period).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit exceeded (throttling / brute-force protection).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

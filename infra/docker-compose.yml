@@ -1,0 +1,94 @@
+name: ishtirak
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ishtirak
+      POSTGRES_USER: ishtirak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ishtirak}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ishtirak"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  core-java:
+    build: ../services/core-java
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ishtirak
+      SPRING_DATASOURCE_USERNAME: ishtirak
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-ishtirak}
+      ISHTIRAK_RABBITMQ_HOST: rabbitmq
+      ISHTIRAK_JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-bytes-minimum-secret}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  analytics-python:
+    build: ../services/analytics-python
+    environment:
+      ISHTIRAK_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ISHTIRAK_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8082:8082"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  gateway-node:
+    build: ../services/gateway-node
+    environment:
+      CORE_JAVA_URL: http://core-java:8081
+      ANALYTICS_URL: http://analytics-python:8082
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-bytes-minimum-secret}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - core-java
+      - analytics-python
+
+  web:
+    build: ../web
+    environment:
+      VITE_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway-node
+
+volumes:
+  pgdata:
