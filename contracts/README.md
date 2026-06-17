@@ -53,6 +53,14 @@ message `$ref`s the matching `events/*.schema.json`), and the gateway WebSocket
 protocol (server↔client message envelopes). Operations are annotated with the
 producing/consuming service.
 
+There is also a fifth channel, **`reading.flagged`** — an internal risk signal
+**published by `analytics-python`** (not core-java) and consumed by the gateway
+to drive the `tampering.alert` WebSocket push. The `events/*.schema.json` files
+hold only the four formal **core-java** domain events; `reading.flagged` is
+modeled inline in `asyncapi.yaml`. (Note: AsyncAPI message payloads use a direct
+`$ref` to the event schemas — the `schemaFormat: …draft-2020-12` form is rejected
+by the AsyncAPI parser, so don't reintroduce it.)
+
 ## Validation
 
 CI (`.github/workflows/ci.yml`, `contracts` job) lints every spec on each PR:

@@ -102,12 +102,16 @@ strongest, not for novelty (see [ADR-001](#adr-001-polyglot-microservices)).
 ## Cross-cutting concerns
 
 - **Authentication boundary.** The gateway is the **only** service exposed to
-  the browser. It verifies the JWT on every request and on the WebSocket
-  handshake, then forwards the authenticated identity (operator + role) inward.
-  Internal services validate input and re-enforce tenant scoping but trust the
-  gateway for authentication. JWT secret is required and validated at boot
-  (≥32 chars) — see `gateway-node/src/config.ts` and
-  `infra/.env.example`. ⏳ middleware lands in Phase 4.
+  the browser. It verifies the end-user JWT on every request and on the WebSocket
+  handshake, then forwards the authenticated identity inward. Inward propagation
+  is concrete (ADR-008): internal services accept a gateway-signed **service**
+  token (`gatewayServiceAuth`), **not** the raw browser JWT, and receive the
+  end-user identity as the gateway-injected trusted headers `X-Operator-Id` +
+  `X-Actor-Role` — the source every internal query filters by. Internal ports are
+  `x-internal` (not browser-reachable). JWT secret is required and validated at
+  boot (≥32 chars) — see `gateway-node/src/config.ts` and `infra/.env.example`.
+  The full contract is encoded in the OpenAPI specs and [API.md](./API.md).
+  ⏳ middleware lands in Phase 4.
 - **Multi-tenant scoping.** Every entity, query, and event carries an
   `operatorId`. **Every** read/write in `core-java` is filtered by the caller's
   operator; every event includes `operatorId` so consumers stay tenant-scoped.
@@ -249,3 +253,25 @@ migration trigger. The capture store is the working copy, not durable truth:
 RabbitMQ is not replayable after consumption, but core-java's PostgreSQL retains
 the readings and can backfill it. **This is not a v1 input** — it only powers
 post-launch retraining.
+
+### ADR-008: Internal trust boundary & gateway identity propagation
+
+**Context.** The gateway authenticates the browser (ADR-003), but the internal
+services still need the end-user's operator + role to enforce tenant scoping and
+RBAC — and they must not be bypassable by replaying a browser JWT directly to
+their ports. **Decision.** Internal services (`core-java`, `analytics-python`)
+expose a distinct security scheme `gatewayServiceAuth` and accept only a
+short-lived, gateway-signed **service** token — never the raw browser JWT. The
+gateway derives the end-user identity from the verified JWT and injects it inward
+as the trusted headers `X-Operator-Id` (uuid) and `X-Actor-Role`
+(`OPERATOR_ADMIN` | `OPERATOR_STAFF` | `SUBSCRIBER`), required on every internal
+domain operation; a request missing them is rejected. Internal servers are marked
+`x-internal` (not routable from the browser). **Consequences.** There is now a
+defined source for the "filter every query by `operatorId`" hard rule, and the
+browser-JWT-replay bypass is closed. The cost is that the gateway must mint/sign
+service tokens and reliably inject the identity headers, and deployment must keep
+internal ports off the public network. Encoded in
+[`contracts/openapi/components.yaml`](../contracts/openapi/components.yaml)
+(`gatewayServiceAuth`, `operatorIdHeader`, `actorRoleHeader`) and the per-service
+specs; see also [API.md](./API.md) and the multi-tenancy section of
+[SYSTEM_DESIGN](./SYSTEM_DESIGN.md#multi-tenancy).

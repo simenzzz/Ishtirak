@@ -43,6 +43,29 @@
 
 ---
 
+## Phase 2 entry — open questions & deferred decisions
+
+Carried into implementation from the design/contract phase. Resolve or
+consciously confirm each before the relevant work lands.
+
+- **Billing tariff formula** — the invoice *shape* is fixed by the contract, the
+  *pricing* is not. Confirm with the product owner before the billing run; see
+  the flagged [billing model assumption](./SYSTEM_DESIGN.md#billing-model-assumption--confirm-at-phase-2).
+- **Subscriber `{id}` access** — current specs let a SUBSCRIBER hit by-id
+  invoice/reading endpoints scoped to their own data (404 otherwise). Revisit
+  whether to instead confine subscribers to `/api/me/*` projections (Phase 4/5).
+- **Rate limiting** — `429` is modeled on the auth endpoints; extend throttling
+  to mutations during implementation (repo rule: "rate limiting on all endpoints").
+- **`reading.flagged`** — the analytics→gateway risk signal is modeled inline in
+  [`contracts/asyncapi.yaml`](../contracts/asyncapi.yaml). If it becomes a stable
+  cross-service contract, promote it to a `contracts/events/*.schema.json` file
+  alongside the four core-java domain events.
+- **Internal identity propagation (ADR-008)** — Phase 2/4 must implement the
+  `gatewayServiceAuth` service token + `X-Operator-Id`/`X-Actor-Role` injected
+  headers; every core-java query filters by `X-Operator-Id`.
+- **AsyncAPI gotcha** — keep event message payloads as a direct `$ref`; the
+  `schemaFormat: …draft-2020-12` form is rejected by the AsyncAPI parser.
+
 ## Phase 2 — core-java domain model + event publishing ⏳
 
 **Scope.** Turn `core-java` into the system of record (ADR-004).

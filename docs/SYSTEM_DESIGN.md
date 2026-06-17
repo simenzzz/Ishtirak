@@ -88,11 +88,17 @@ Operator ──POST /api/readings──► gateway ──► core-java
                                               • compute features, run rule engine
                                               • append event to capture store (ADR-007)
                                               • if risk flagged → expose via risk API
-                                                + emit/forward alert
+                                                + emit `reading.flagged`
                                                      │
                                                      ▼
-                                              gateway-node ── WS "tampering alert" ──► operator
+                                   gateway-node (consumes reading.flagged)
+                                              └─ WS "tampering alert" ──► operator
 ```
+
+> Unlike the four core-java domain events, `reading.flagged` is published by
+> **analytics-python** and consumed by the gateway. It is modeled inline in
+> [`contracts/asyncapi.yaml`](../contracts/asyncapi.yaml) rather than in
+> `contracts/events/` (which holds the formal core-java domain events).
 
 ### 3. Load-shedding countdown
 
@@ -131,8 +137,10 @@ All asynchronous integration goes through the RabbitMQ topic exchange
 - **Ordering.** No global ordering guarantee. Where order matters (cumulative
   meter readings), consumers order by `occurredAt` / `readingAt` and tolerate
   out-of-order arrival rather than assuming broker order.
-- **Producer.** Only `core-java` publishes (ADR-004), and only **after** the
-  owning DB transaction commits, to avoid emitting events for rolled-back state.
+- **Producer.** `core-java` publishes the four domain events (ADR-004), only
+  **after** the owning DB transaction commits, to avoid emitting events for
+  rolled-back state. (`analytics-python` additionally publishes the internal
+  `reading.flagged` risk signal — see the tampering flow above.)
 - **Validation.** Producers and consumers validate payloads against the
   [`contracts/events`](../contracts/events) JSON Schemas.
 
