@@ -255,25 +255,7 @@ components:
       contentType: application/json
       summary: Internal risk signal (analytics-python → gateway-node).
       payload:
-        type: object
-        additionalProperties: false
-        required: [eventId, eventType, operatorId, occurredAt, payload]
-        properties:
-          eventId: { type: string, format: uuid }
-          eventType: { type: string, const: reading.flagged }
-          operatorId: { type: string, format: uuid }
-          occurredAt: { type: string, format: date-time }
-          payload:
-            type: object
-            additionalProperties: false
-            required: [readingId, subscriberId, reason, score]
-            properties:
-              readingId: { type: string, format: uuid }
-              subscriberId: { type: string, format: uuid }
-              reason:
-                type: string
-                enum: [NEGATIVE_DELTA, ZERO_DELTA, DROP_GT_THRESHOLD, EXCEEDS_TIER_CAP, ML_ANOMALY]
-              score: { type: number, minimum: 0, maximum: 1 }
+        $ref: './events/reading-flagged.schema.json'
 
     # --- WebSocket message envelopes (type/data/ts) ---
     OutageCountdown:
@@ -306,10 +288,11 @@ components:
           ts: { type: string, format: date-time }
           data:
             type: object
-            required: [invoiceId, amountUsd, periodEnd]
+            required: [invoiceId, amountUsd, amountLbp, periodEnd]
             properties:
               invoiceId: { type: string, format: uuid }
               amountUsd: { type: number, minimum: 0 }
+              amountLbp: { type: integer, minimum: 0 }
               periodEnd: { type: string, format: date }
     TamperingAlert:
       name: TamperingAlert

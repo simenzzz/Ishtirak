@@ -70,6 +70,9 @@ These are hard rules for any work in this repo.
 ### Collaboration
 - **When unsure, always ask the user.** Do not guess on ambiguous requirements,
   scope, or design trade-offs — surface the question instead of assuming.
+- When implementing roadmap work, update `docs/ROADMAP.md` in the same change:
+  check off completed items, split broad bullets when only part is done, and
+  leave production-only or unverified work unchecked.
 
 ## Build & Test
 

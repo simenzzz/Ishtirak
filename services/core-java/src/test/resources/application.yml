@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:ishtirak;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  rabbitmq:
+    host: localhost
+    port: 5672
+
+ishtirak:
+  gateway-service-token-secret: dev-gateway-service-token-secret-32
+  jwt-secret: dev-only-change-me-32-bytes-minimum-secret
+  outbox:
+    publish-delay-ms: 60000
+  rate-limit:
+    mutations-per-minute: 1000
+    readings-per-minute: 1000
+    billing-per-hour: 1000

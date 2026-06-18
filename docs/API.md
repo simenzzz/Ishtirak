@@ -33,15 +33,18 @@
   The browser talks **only** to the gateway (ADR-003). `core-java` and
   `analytics-python` are internal; their REST is consumed by the gateway.
 - **Format.** JSON request/response; `Content-Type: application/json`. Timestamps
-  are ISO-8601 UTC. Money is `amountUsd` (number).
+  are ISO-8601 UTC. Billing is dual-currency: invoices carry `amountUsd` and
+  `amountLbp`; payments carry tendered currency plus `appliedUsd` / `appliedLbp`.
 - **Authentication.** Bearer JWT on the gateway: `Authorization: Bearer <token>`.
   The gateway verifies the token (secret ≥32 chars, validated at boot) and
   derives `operatorId` + role from it — **never** from request parameters
   (ADR-003). Internal services (`core-java`, `analytics-python`) are not
   browser-reachable; they accept a gateway-signed **service** token (not the
   browser JWT) and receive the end-user identity as gateway-injected trusted
-  headers `X-Operator-Id` + `X-Actor-Role`, which they re-validate and scope
-  every query by. ⏳ Phase 4.
+  headers `X-Operator-Id` + `X-Actor-Role` plus `X-Actor-Subscriber-Id` for
+  subscriber callers. The service token carries matching `operatorId`, `role`,
+  and optional `subscriberId` claims; internal services reject mismatches and
+  scope every query by those values. ⏳ Gateway middleware lands in Phase 4.
 - **Tenant scoping.** Every resource is implicitly scoped to the caller's
   `operatorId`. Clients never pass `operatorId`; the server injects it.
 - **Roles.** `OPERATOR_ADMIN`, `OPERATOR_STAFF` (dashboard) and `SUBSCRIBER`
@@ -53,8 +56,8 @@
   ```
   Status codes: `400` validation, `401` missing/invalid token, `403` wrong role
   / cross-tenant, `404` not found, `409` conflict (e.g. duplicate invoice),
-  `429` rate-limited (modeled on auth endpoints; throttling is a cross-cutting
-  concern applied more broadly), `500` server. Error messages never leak secrets
+  `429` rate-limited (gateway Redis limits plus defensive core-java mutation
+  limits), `500` server. Error messages never leak secrets
   or internal detail; `details[].issue` is user-safe text only.
 - **Pagination.** List endpoints accept `?page` (1-based) and `?limit`
   (default 20, max 100) and return:
@@ -74,8 +77,9 @@ The gateway authenticates, then aggregates/proxies to the internal services.
 ### Auth
 | Method | Path | Role | Description |
 | ------ | ---- | ---- | ----------- |
-| `POST` | `/api/auth/login` | public | Exchange credentials for a JWT. ⏳ |
-| `POST` | `/api/auth/refresh` | any | Refresh an access token. ⏳ |
+| `POST` | `/api/auth/login` | public | Exchange email/password credentials; returns tokens for a single membership or a selection token plus available memberships for multi-home users. ⏳ |
+| `POST` | `/api/auth/select-context` | public | Exchange a selection token + membership id for context-bound access/refresh tokens. ⏳ |
+| `POST` | `/api/auth/refresh` | any | Rotate a single-use refresh token; reuse revokes the token family. ⏳ |
 | `GET`  | `/api/me` | any | Current identity (operator, role). ⏳ |
 
 ### Subscribers & tiers
@@ -83,29 +87,35 @@ The gateway authenticates, then aggregates/proxies to the internal services.
 | ------ | ---- | ---- | ----------- |
 | `GET`  | `/api/subscribers` | staff/admin | List subscribers (paginated). ⏳ |
 | `POST` | `/api/subscribers` | admin | Create a subscriber (name, tierId, meterId). ⏳ |
-| `GET`  | `/api/subscribers/{id}` | staff/admin · own (subscriber) | Subscriber detail. ⏳ |
+| `GET`  | `/api/subscribers/{id}` | staff/admin | Subscriber detail. ⏳ |
 | `PATCH`| `/api/subscribers/{id}` | admin | Update tier / details. ⏳ |
 | `GET`  | `/api/tiers` | staff/admin | List amperage tiers + pricing. ⏳ |
+| `POST` | `/api/tiers` | admin | Create an amperage tier with pricing and optional tariff override. ⏳ |
+| `GET`  | `/api/tiers/{id}` | staff/admin | Tier detail. ⏳ |
+| `PATCH`| `/api/tiers/{id}` | admin | Update tier pricing, tariff override, or status. ⏳ |
 
 ### Readings
 | Method | Path | Role | Description |
 | ------ | ---- | ---- | ----------- |
 | `POST` | `/api/readings` | staff/admin | Record a meter reading (`subscriberId`, `kwh`, `readingAt`). Triggers `reading.recorded`. ⏳ |
-| `GET`  | `/api/subscribers/{id}/readings` | staff/admin · own | Reading history. ⏳ |
+| `GET`  | `/api/subscribers/{id}/readings` | staff/admin | Reading history. ⏳ |
+| `GET`  | `/api/me/readings` | subscriber | The caller's own reading history. ⏳ |
 
 ### Billing & invoices
 | Method | Path | Role | Description |
 | ------ | ---- | ---- | ----------- |
 | `POST` | `/api/billing-runs` | admin | Trigger the monthly billing run for a period. Issues invoices, triggers `invoice.issued`. Accepts `Idempotency-Key`. ⏳ |
 | `GET`  | `/api/invoices` | staff/admin | List invoices (filter by period, status). ⏳ |
-| `GET`  | `/api/invoices/{id}` | staff/admin · own | Invoice detail. ⏳ |
+| `GET`  | `/api/invoices/{id}` | staff/admin | Invoice detail. ⏳ |
 | `GET`  | `/api/me/invoices` | subscriber | The caller's own invoices (portal). ⏳ |
+| `GET`  | `/api/me/invoices/{id}` | subscriber | One invoice owned by the caller. ⏳ |
 
 ### Payments
 | Method | Path | Role | Description |
 | ------ | ---- | ---- | ----------- |
-| `POST` | `/api/payments` | staff/admin | Record a payment against an invoice (`invoiceId`, `amountUsd`, `method`). Triggers `payment.received`. ⏳ |
-| `GET`  | `/api/invoices/{id}/payments` | staff/admin · own | Payments for an invoice. ⏳ |
+| `POST` | `/api/payments` | staff/admin | Record a payment (`invoiceId`, `currency`, `tenderedAmount`, `method`). Triggers `payment.received`. ⏳ |
+| `GET`  | `/api/invoices/{id}/payments` | staff/admin | Payments for an invoice. ⏳ |
+| `GET`  | `/api/me/invoices/{id}/payments` | subscriber | Payments for one invoice owned by the caller. ⏳ |
 
 ### Outages
 | Method | Path | Role | Description |
@@ -136,21 +146,33 @@ The gateway authenticates, then aggregates/proxies to the internal services.
 
 Base: `http://localhost:8081`. Consumed by the gateway. Request/response shapes
 align with the [domain model](./SYSTEM_DESIGN.md#domain-model) and the
-[event payloads](#asynchronous-events). Mutations run in a DB transaction and
-emit the corresponding event **after commit**.
+[event payloads](#asynchronous-events). Mutations run in a DB transaction that
+also writes the corresponding event to a transactional outbox; the outbox is
+published to `ishtirak.events` after commit. Paths have **no `/api` prefix** —
+this is the internal surface the gateway proxies to.
+
+core-java is the **token issuer**: it owns the auth endpoints below, which the
+gateway's `/api/auth/*` will front in Phase 4.
 
 | Method | Path | Emits | Description |
 | ------ | ---- | ----- | ----------- |
-| `GET`/`POST` | `/subscribers`, `/subscribers/{id}` | — | Subscriber CRUD. ⏳ |
-| `GET` | `/tiers`, `/tiers/{id}` | — | Amperage tiers + pricing. ⏳ |
-| `POST` | `/readings` | `reading.recorded` | Persist a reading. ⏳ |
-| `GET` | `/subscribers/{id}/readings` | — | Reading history. ⏳ |
-| `POST` | `/billing-runs` | `invoice.issued` (×N) | Atomic monthly billing run. ⏳ |
-| `GET` | `/invoices`, `/invoices/{id}` | — | Invoice queries. ⏳ |
-| `GET` | `/invoices/{id}/payments` | — | Payments for an invoice. ⏳ |
-| `POST` | `/payments` | `payment.received` | Record a payment. ⏳ |
-| `POST` | `/outages` | `outage.scheduled` | Schedule an outage. ⏳ |
-| `GET` | `/outages` | — | Outage queries. ⏳ |
+| `POST` | `/auth/login` | — | Exchange email/password; returns tokens or a selection token + memberships. ✅ |
+| `POST` | `/auth/select-context` | — | Exchange a selection token + membership id for access/refresh tokens. ✅ |
+| `POST` | `/auth/refresh` | — | Rotate a single-use refresh token; reuse revokes the family. ✅ |
+| `GET`/`POST` | `/subscribers`, `/subscribers/{id}` | — | List/create subscribers; subscriber detail (`GET`/`POST` only — no `PATCH`). ✅ |
+| `GET`/`POST` | `/tiers`, `/tiers/{id}` | — | List/create tiers + pricing; tier detail. ✅ |
+| `PATCH` | `/tiers/{id}` | — | Update tier pricing / tariff override / status. ✅ |
+| `POST` | `/readings` | `reading.recorded` | Persist a reading. ✅ |
+| `GET` | `/subscribers/{id}/readings` | — | Reading history (staff/admin). ✅ |
+| `GET` | `/me/readings` | — | The caller's own reading history (subscriber). ✅ |
+| `POST` | `/billing-runs` | `invoice.issued` (×N) | Atomic monthly billing run. ✅ |
+| `GET` | `/invoices`, `/invoices/{id}` | — | Invoice queries (staff/admin). ✅ |
+| `GET` | `/me/invoices`, `/me/invoices/{id}` | — | The caller's own invoices (subscriber). ✅ |
+| `GET` | `/invoices/{id}/payments` | — | Payments for an invoice (staff/admin). ✅ |
+| `GET` | `/me/invoices/{id}/payments` | — | Payments for one invoice owned by the caller (subscriber). ✅ |
+| `POST` | `/payments` | `payment.received` | Record a payment. ✅ |
+| `POST` | `/outages` | `outage.scheduled` | Schedule an outage. ✅ |
+| `GET` | `/outages` | — | Outage queries. ✅ |
 | `GET` | `/health`, `/ready` | — | Liveness / readiness. ✅ |
 | `GET` | `/actuator/health/{liveness,readiness}` | — | Spring Actuator probes. ✅ |
 
@@ -204,7 +226,7 @@ Redis-backed fan-out (ADR-006). ⏳ Phase 4.
 | `type` | `data` | Source | Audience |
 | ------ | ------ | ------ | -------- |
 | `outage.countdown` | `{ "outageId", "startsAt", "endsAt", "secondsRemaining" }` | `outage.scheduled` + timer | subscriber |
-| `invoice.ready` | `{ "invoiceId", "amountUsd", "periodEnd" }` | `invoice.issued` | subscriber |
+| `invoice.ready` | `{ "invoiceId", "amountUsd", "amountLbp", "periodEnd" }` | `invoice.issued` | subscriber |
 | `tampering.alert` | `{ "subscriberId", "readingId", "reason", "score" }` | `reading.flagged` (analytics→gateway) | operator |
 | `unauthorized` | `{ "channel", "reason" }` | server (rejected subscribe) | any |
 | `pong` | `{}` | — | any |
@@ -259,6 +281,7 @@ Producer: `core-java` (billing run) · Consumers: `gateway-node` (WS push),
   "periodStart":  "date",
   "periodEnd":    "date",
   "amountUsd":    0.0,          // >= 0
+  "amountLbp":    0,            // >= 0
   "kwhConsumed":  0.0           // >= 0
 }
 ```
@@ -271,7 +294,10 @@ recorded against an invoice.
   "paymentId":    "uuid",
   "invoiceId":    "uuid",
   "subscriberId": "uuid",
-  "amountUsd":    0.0,          // >= 0
+  "currency":     "USD",        // USD | LBP
+  "tenderedAmount": 0.0,        // >= 0
+  "appliedUsd":   0.0,          // >= 0
+  "appliedLbp":   0,            // >= 0
   "method":       "CASH"        // CASH | WHISH
 }
 ```
@@ -294,6 +320,6 @@ derived state by `operatorId` — see
 
 > Besides these four core-java domain events, `analytics-python` publishes one
 > internal signal — **`reading.flagged`** — consumed by the gateway to drive the
-> `tampering.alert` WebSocket push. It is modeled in
-> [`contracts/asyncapi.yaml`](../contracts/asyncapi.yaml) (not in
-> `contracts/events/`, which holds the formal core-java domain events).
+> `tampering.alert` WebSocket push. It is a first-class event schema in
+> [`contracts/events/reading-flagged.schema.json`](../contracts/events/reading-flagged.schema.json)
+> and AsyncAPI references it directly.

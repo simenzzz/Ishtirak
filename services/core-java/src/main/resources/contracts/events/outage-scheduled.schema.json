@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ishtirak.dev/events/outage-scheduled.schema.json",
+  "title": "OutageScheduled",
+  "description": "Emitted when an operator schedules a load-shedding window.",
+  "type": "object",
+  "required": ["eventId", "eventType", "operatorId", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "outage.scheduled" },
+    "operatorId": { "type": "string", "format": "uuid" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["outageId", "startsAt", "endsAt", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "outageId": { "type": "string", "format": "uuid" },
+        "startsAt": { "type": "string", "format": "date-time" },
+        "endsAt": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string", "enum": ["FUEL", "MAINTENANCE", "GRID", "OTHER"] }
+      }
+    }
+  }
+}

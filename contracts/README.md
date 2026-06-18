@@ -55,11 +55,11 @@ producing/consuming service.
 
 There is also a fifth channel, **`reading.flagged`** — an internal risk signal
 **published by `analytics-python`** (not core-java) and consumed by the gateway
-to drive the `tampering.alert` WebSocket push. The `events/*.schema.json` files
-hold only the four formal **core-java** domain events; `reading.flagged` is
-modeled inline in `asyncapi.yaml`. (Note: AsyncAPI message payloads use a direct
-`$ref` to the event schemas — the `schemaFormat: …draft-2020-12` form is rejected
-by the AsyncAPI parser, so don't reintroduce it.)
+to drive the `tampering.alert` WebSocket push. It has its own
+`events/reading-flagged.schema.json` contract, and AsyncAPI references it
+directly. (Note: AsyncAPI message payloads use a direct `$ref` to the event
+schemas — the `schemaFormat: …draft-2020-12` form is rejected by the AsyncAPI
+parser, so don't reintroduce it.)
 
 ## Validation
 

@@ -25,10 +25,11 @@ components:
       description: >
         **Internal trust boundary.** core-java and analytics-python accept only a
         short-lived, gateway-signed *service* token here — NOT the raw browser
-        JWT. The end-user identity is propagated as the trusted `X-Operator-Id` /
-        `X-Actor-Role` headers the gateway injects. Internal ports must not be
-        reachable from the browser (servers are marked `x-internal`). Every
-        internal query MUST filter by `X-Operator-Id`.
+        JWT. The service token carries `operatorId`, `role`, and optional
+        `subscriberId` claims that must match the gateway-injected
+        `X-Operator-Id` / `X-Actor-Role` / `X-Actor-Subscriber-Id` headers.
+        Internal ports must not be reachable from the browser (servers are
+        marked `x-internal`). Every internal query MUST filter by `X-Operator-Id`.
 
   parameters:
     pageParam:
@@ -49,9 +50,8 @@ components:
       required: true
       description: Resource identifier (UUID).
       schema: { type: string, format: uuid }
-    # Gateway-injected trusted identity headers for internal services (see
-    # gatewayServiceAuth). The gateway sets these from the verified end-user JWT;
-    # internal services MUST trust them and reject requests that lack them.
+    # Gateway-injected trusted identity headers for internal services. These
+    # must match the identity claims in gatewayServiceAuth.
     operatorIdHeader:
       name: X-Operator-Id
       in: header
@@ -64,6 +64,12 @@ components:
       required: true
       description: Authenticated end-user role, injected by the gateway.
       schema: { type: string, enum: [OPERATOR_ADMIN, OPERATOR_STAFF, SUBSCRIBER] }
+    actorSubscriberIdHeader:
+      name: X-Actor-Subscriber-Id
+      in: header
+      required: false
+      description: Gateway-injected subscriber id. Required when X-Actor-Role is SUBSCRIBER.
+      schema: { type: string, format: uuid }
 
   schemas:
     # --- cross-cutting ----------------------------------------------------
@@ -111,19 +117,39 @@ components:
         page: { type: integer, minimum: 1 }
         limit: { type: integer, minimum: 1 }
 
+    TariffPolicy:
+      type: string
+      enum: [FLAT, METERED, HYBRID]
+      description: >
+        FLAT charges standing fees only, METERED charges kWh rates only, and
+        HYBRID charges both. Operators define a default; tiers may override it.
+
+    Currency:
+      type: string
+      enum: [USD, LBP]
+
     # --- domain -----------------------------------------------------------
     # Fields mirror ../events/*.schema.json payloads (event uses readingId etc.;
     # the entity exposes the same value as `id`).
     Tier:
       type: object
       additionalProperties: false
-      required: [id, name, amperage, standingFeeUsd, perKwhRateUsd]
+      required: [id, name, amperage, effectiveTariffPolicy, standingFeeUsd, standingFeeLbp, perKwhRateUsd, perKwhRateLbp, status]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, examples: ["10A"] }
         amperage: { type: integer, minimum: 1, description: Amperage cap in amps. }
+        tariffPolicyOverride:
+          oneOf:
+            - { $ref: '#/components/schemas/TariffPolicy' }
+            - { type: 'null' }
+          description: Null means inherit the operator default tariff policy.
+        effectiveTariffPolicy: { $ref: '#/components/schemas/TariffPolicy' }
         standingFeeUsd: { type: number, minimum: 0, description: Flat monthly subscription fee. }
+        standingFeeLbp: { type: integer, minimum: 0, description: Flat monthly subscription fee in Lebanese lira. }
         perKwhRateUsd: { type: number, minimum: 0, description: Metered rate per kWh. }
+        perKwhRateLbp: { type: integer, minimum: 0, description: Metered rate per kWh in Lebanese lira. }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
 
     Subscriber:
       type: object
@@ -153,13 +179,14 @@ components:
     Invoice:
       type: object
       additionalProperties: false
-      required: [id, subscriberId, periodStart, periodEnd, amountUsd, kwhConsumed, status]
+      required: [id, subscriberId, periodStart, periodEnd, amountUsd, amountLbp, kwhConsumed, status]
       properties:
         id: { type: string, format: uuid }
         subscriberId: { type: string, format: uuid }
         periodStart: { type: string, format: date }
         periodEnd: { type: string, format: date }
         amountUsd: { type: number, minimum: 0 }
+        amountLbp: { type: integer, minimum: 0 }
         kwhConsumed: { type: number, minimum: 0 }
         status: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID] }
         issuedAt: { type: string, format: date-time }
@@ -167,12 +194,15 @@ components:
     Payment:
       type: object
       additionalProperties: false
-      required: [id, invoiceId, subscriberId, amountUsd, method]
+      required: [id, invoiceId, subscriberId, currency, tenderedAmount, appliedUsd, appliedLbp, method]
       properties:
         id: { type: string, format: uuid }
         invoiceId: { type: string, format: uuid }
         subscriberId: { type: string, format: uuid }
-        amountUsd: { type: number, minimum: 0 }
+        currency: { $ref: '#/components/schemas/Currency' }
+        tenderedAmount: { type: number, minimum: 0 }
+        appliedUsd: { type: number, minimum: 0 }
+        appliedLbp: { type: integer, minimum: 0 }
         method: { type: string, enum: [CASH, WHISH] }
         receivedAt: { type: string, format: date-time }
 
@@ -208,12 +238,14 @@ components:
     CollectionRate:
       type: object
       additionalProperties: false
-      required: [periodStart, periodEnd, issuedUsd, collectedUsd, rate]
+      required: [periodStart, periodEnd, issuedUsd, issuedLbp, collectedUsd, collectedLbp, rate]
       properties:
         periodStart: { type: string, format: date }
         periodEnd: { type: string, format: date }
         issuedUsd: { type: number, minimum: 0 }
+        issuedLbp: { type: integer, minimum: 0 }
         collectedUsd: { type: number, minimum: 0 }
+        collectedLbp: { type: integer, minimum: 0 }
         rate: { type: number, minimum: 0, maximum: 1, description: collectedUsd / issuedUsd. }
 
     HealthStatus:

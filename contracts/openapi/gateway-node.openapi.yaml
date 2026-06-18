@@ -40,11 +40,13 @@ paths:
     post:
       tags: [auth]
       operationId: login
-      summary: Exchange credentials for a JWT
+      summary: Exchange email/password credentials
       description: >
         Rate-limited (brute-force / credential-stuffing protection). The
         `password` field MUST never be logged (the gateway uses pino-http
-        request logging — redact this body).
+        request logging — redact this body). Users are global by email and may
+        have multiple operator memberships; multi-membership logins return a
+        short-lived selection token instead of context-bound access tokens.
       x-status: planned
       security: []
       requestBody:
@@ -54,16 +56,64 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [username, password]
+              required: [email, password]
               properties:
-                username: { type: string }
+                email: { type: string, format: email }
                 password:
                   type: string
                   format: password
                   description: Never logged or echoed back.
       responses:
         '200':
-          description: Authenticated.
+          description: Authenticated or context selection required.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [contextSelectionRequired, memberships]
+                properties:
+                  contextSelectionRequired: { type: boolean }
+                  selectionToken: { type: string }
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  memberships:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [membershipId, operatorId, operatorName, role]
+                      properties:
+                        membershipId: { type: string, format: uuid }
+                        operatorId: { type: string, format: uuid }
+                        operatorName: { type: string }
+                        role: { type: string, enum: [OPERATOR_ADMIN, OPERATOR_STAFF, SUBSCRIBER] }
+                        subscriberId: { type: string, format: uuid }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: 'components.yaml#/components/responses/TooManyRequests' }
+
+  /api/auth/select-context:
+    post:
+      tags: [auth]
+      operationId: selectAuthContext
+      summary: Select an operator membership
+      x-status: planned
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [selectionToken, membershipId]
+              properties:
+                selectionToken: { type: string }
+                membershipId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Context-bound tokens.
           content:
             application/json:
               schema:
@@ -73,9 +123,8 @@ paths:
                 properties:
                   accessToken: { type: string }
                   refreshToken: { type: string }
-        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
-        '429': { $ref: 'components.yaml#/components/responses/TooManyRequests' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
 
   /api/auth/refresh:
     post:
@@ -197,10 +246,7 @@ paths:
       operationId: apiGetSubscriber
       summary: Get a subscriber
       x-status: planned
-      x-authorization: >
-        OPERATOR_ADMIN/STAFF: any subscriber in the operator. SUBSCRIBER: only
-        when {id} == caller's own subscriberId, else 404. `meterId` is
-        operator-staff-only output.
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
           description: Subscriber.
@@ -249,9 +295,7 @@ paths:
       operationId: apiListSubscriberReadings
       summary: Reading history for a subscriber
       x-status: planned
-      x-authorization: >
-        OPERATOR_ADMIN/STAFF: any subscriber in the operator. SUBSCRIBER: only
-        own readings ({id} == caller's subscriberId), else 404.
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
           description: Page of readings.
@@ -285,6 +329,95 @@ paths:
                 type: array
                 items: { $ref: 'components.yaml#/components/schemas/Tier' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+    post:
+      tags: [tiers]
+      operationId: apiCreateTier
+      summary: Create an amperage tier and tariff override
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, amperage, standingFeeUsd, standingFeeLbp, perKwhRateUsd, perKwhRateLbp]
+              properties:
+                name: { type: string }
+                amperage: { type: integer, minimum: 1 }
+                tariffPolicyOverride:
+                  oneOf:
+                    - { $ref: 'components.yaml#/components/schemas/TariffPolicy' }
+                    - { type: 'null' }
+                standingFeeUsd: { type: number, minimum: 0 }
+                standingFeeLbp: { type: integer, minimum: 0 }
+                perKwhRateUsd: { type: number, minimum: 0 }
+                perKwhRateLbp: { type: integer, minimum: 0 }
+      responses:
+        '201':
+          description: Created tier.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Tier' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/tiers/{id}:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    get:
+      tags: [tiers]
+      operationId: apiGetTier
+      summary: Get a tier
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
+      responses:
+        '200':
+          description: Tier.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Tier' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+    patch:
+      tags: [tiers]
+      operationId: apiUpdateTier
+      summary: Update tier pricing, policy override, or status
+      x-status: planned
+      x-required-roles: [OPERATOR_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string }
+                amperage: { type: integer, minimum: 1 }
+                tariffPolicyOverride:
+                  oneOf:
+                    - { $ref: 'components.yaml#/components/schemas/TariffPolicy' }
+                    - { type: 'null' }
+                standingFeeUsd: { type: number, minimum: 0 }
+                standingFeeLbp: { type: integer, minimum: 0 }
+                perKwhRateUsd: { type: number, minimum: 0 }
+                perKwhRateLbp: { type: integer, minimum: 0 }
+                status: { type: string, enum: [ACTIVE, INACTIVE] }
+      responses:
+        '200':
+          description: Updated tier.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Tier' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
 
   /api/readings:
     post:
@@ -394,9 +527,7 @@ paths:
       operationId: apiGetInvoice
       summary: Get an invoice
       x-status: planned
-      x-authorization: >
-        OPERATOR_ADMIN/STAFF: any invoice in the operator. SUBSCRIBER: only own
-        invoices (invoice.subscriberId == caller's subscriberId), else 404.
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
           description: Invoice.
@@ -415,9 +546,7 @@ paths:
       operationId: apiListInvoicePayments
       summary: Payments recorded against an invoice
       x-status: planned
-      x-authorization: >
-        OPERATOR_ADMIN/STAFF: any invoice in the operator. SUBSCRIBER: only own
-        invoice's payments, else 404.
+      x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
           description: Payments for the invoice.
@@ -436,6 +565,7 @@ paths:
       operationId: apiListMyInvoices
       summary: The caller's own invoices (subscriber portal)
       x-status: planned
+      x-required-roles: [SUBSCRIBER]
       parameters:
         - $ref: 'components.yaml#/components/parameters/pageParam'
         - $ref: 'components.yaml#/components/parameters/limitParam'
@@ -455,6 +585,73 @@ paths:
                   meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
 
+  /api/me/readings:
+    get:
+      tags: [readings]
+      operationId: apiListMyReadings
+      summary: The caller's own readings (subscriber portal)
+      x-status: planned
+      x-required-roles: [SUBSCRIBER]
+      parameters:
+        - $ref: 'components.yaml#/components/parameters/pageParam'
+        - $ref: 'components.yaml#/components/parameters/limitParam'
+      responses:
+        '200':
+          description: Page of the subscriber's readings.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/Reading' }
+                  meta: { $ref: 'components.yaml#/components/schemas/PageMeta' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /api/me/invoices/{id}:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    get:
+      tags: [billing]
+      operationId: apiGetMyInvoice
+      summary: One invoice owned by the subscriber caller
+      x-status: planned
+      x-required-roles: [SUBSCRIBER]
+      responses:
+        '200':
+          description: Invoice.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Invoice' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/me/invoices/{id}/payments:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    get:
+      tags: [payments]
+      operationId: apiListMyInvoicePayments
+      summary: Payments for one invoice owned by the subscriber caller
+      x-status: planned
+      x-required-roles: [SUBSCRIBER]
+      responses:
+        '200':
+          description: Payments for the invoice.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/Payment' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
   /api/payments:
     post:
       tags: [payments]
@@ -470,10 +667,11 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [invoiceId, amountUsd, method]
+              required: [invoiceId, currency, tenderedAmount, method]
               properties:
                 invoiceId: { type: string, format: uuid }
-                amountUsd: { type: number, minimum: 0 }
+                currency: { $ref: 'components.yaml#/components/schemas/Currency' }
+                tenderedAmount: { type: number, minimum: 0 }
                 method: { type: string, enum: [CASH, WHISH] }
       responses:
         '201':

@@ -48,45 +48,65 @@
 Carried into implementation from the design/contract phase. Resolve or
 consciously confirm each before the relevant work lands.
 
-- **Billing tariff formula** — the invoice *shape* is fixed by the contract, the
-  *pricing* is not. Confirm with the product owner before the billing run; see
-  the flagged [billing model assumption](./SYSTEM_DESIGN.md#billing-model-assumption--confirm-at-phase-2).
-- **Subscriber `{id}` access** — current specs let a SUBSCRIBER hit by-id
-  invoice/reading endpoints scoped to their own data (404 otherwise). Revisit
-  whether to instead confine subscribers to `/api/me/*` projections (Phase 4/5).
-- **Rate limiting** — `429` is modeled on the auth endpoints; extend throttling
-  to mutations during implementation (repo rule: "rate limiting on all endpoints").
-- **`reading.flagged`** — the analytics→gateway risk signal is modeled inline in
-  [`contracts/asyncapi.yaml`](../contracts/asyncapi.yaml). If it becomes a stable
-  cross-service contract, promote it to a `contracts/events/*.schema.json` file
-  alongside the four core-java domain events.
-- **Internal identity propagation (ADR-008)** — Phase 2/4 must implement the
+- [x] **Billing tariff formula** — resolved for v1: operators define a default
+  tariff policy (`FLAT`, `METERED`, `HYBRID`), tiers may override it, and tiers
+  carry explicit USD/LBP fees and rates. Invoices carry `amountUsd` +
+  `amountLbp`; payments may be tendered in either currency and reconcile using
+  the invoice ratio. Rounding is `HALF_UP`: USD to 2 decimals, LBP to whole lira.
+- [x] **Subscriber `{id}` access** — resolved for v1: SUBSCRIBER callers use
+  `/api/me/*` projections only. By-id subscriber, invoice, reading, and payment
+  endpoints are staff/admin.
+- [x] **Rate limiting** — resolved for Phase 2 core-java defaults: defensive
+  local throttling covers internal mutations 60/min, readings 120/min, and
+  billing runs 3/hour. Login/refresh throttling remains a Phase 4 gateway
+  responsibility because core sees the gateway as the network peer.
+- [x] **`reading.flagged`** — resolved: promoted to
+  [`contracts/events/reading-flagged.schema.json`](../contracts/events/reading-flagged.schema.json)
+  and referenced directly from AsyncAPI.
+- [x] **Internal identity propagation (ADR-008)** — Phase 2/4 must implement the
   `gatewayServiceAuth` service token + `X-Operator-Id`/`X-Actor-Role` injected
   headers; every core-java query filters by `X-Operator-Id`.
-- **AsyncAPI gotcha** — keep event message payloads as a direct `$ref`; the
+- [x] **AsyncAPI gotcha** — keep event message payloads as a direct `$ref`; the
   `schemaFormat: …draft-2020-12` form is rejected by the AsyncAPI parser.
 
-## Phase 2 — core-java domain model + event publishing ⏳
+## Phase 2 — core-java domain model + event publishing ✅ (done)
 
 **Scope.** Turn `core-java` into the system of record (ADR-004).
-- Add deps: `spring-boot-starter-data-jpa`, `org.postgresql:postgresql`,
+- [x] Add deps: `spring-boot-starter-data-jpa`, `org.postgresql:postgresql`,
   `flyway-core`, `spring-boot-starter-amqp`, `spring-boot-starter-security`.
-- Flyway migrations for: operators, users/roles, tiers, subscribers, readings,
+- [x] Flyway migrations for: operators, users/roles, tiers, subscribers, readings,
   invoices, payments, outages (all carrying `operatorId`).
-- Feature packages (entities, repositories, services, controllers, DTOs) for
-  subscribers, tiers, readings, billing, payments, outages — see
+- [x] Persistence-backed feature packages (domain records, repositories, services, controllers,
+  DTOs) for subscribers, tiers, readings, billing, and payments — see
   [API.md › core-java REST](./API.md#core-java-rest--internal-system-of-record).
-- The **billing run**: compute `kwhConsumed` deltas and issue invoices in **one
-  transaction** (confirm the [billing formula](./SYSTEM_DESIGN.md#billing-model-assumption--confirm-at-phase-2) first).
-- RBAC + JWT issuance (Spring Security); enforce `operatorId` scoping on every
+- [x] Add outage feature package and persistence-backed repositories.
+- [x] The **billing run**: compute `kwhConsumed` deltas and issue
+  dual-currency invoices using the operator/tier tariff policy.
+- [x] Make the **billing run** transactional against Postgres.
+- [x] RBAC + JWT issuance (Spring Security); enforce `operatorId` scoping on every
   query.
-- Domain event publisher → `ishtirak.events`, emitting **after commit**, payloads
+- [x] Defensive internal service-token auth + injected identity handling for
+  core-java, with `operatorId` scoping on implemented queries.
+- [x] Domain event publisher → `ishtirak.events` via a transactional outbox, payloads
   validated against the contracts.
 
 **Testing.** Unit (services, billing math, scoping); integration with
 **Testcontainers** (Postgres + RabbitMQ) for repositories, the transactional
 billing run, and event emission; contract tests for each event payload.
 **Security review** required (RBAC, tenancy, payments).
+
+- [x] Unit/integration-style tests for billing math, service-token auth,
+  subscriber self-service projections, idempotent/concurrent billing, payment
+  reconciliation, and contract-safe response shapes.
+- [x] OpenAPI and AsyncAPI validation pass.
+- [x] Code and security reviews clean of CRITICAL/HIGH findings for the
+  persistence-backed Phase 2 foundation.
+- [x] Default local tests cover persistence-backed billing, payments, auth, scoping,
+  and contract-safe API responses against an H2-backed Spring context.
+- [x] Testcontainers smoke coverage is present for Postgres + RabbitMQ contexts.
+  Run it with `./mvnw -Dtest=Phase2ContainersTest test` from `services/core-java`;
+  the command fails if Docker is unavailable or misconfigured. Override Docker
+  Java negotiation with `-Ddocker.api.version=<version>` if needed.
 
 **Exit criteria.** Domain CRUD + billing run + payments work against Postgres;
 all four events are emitted with valid payloads; tenant isolation enforced and

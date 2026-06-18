@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: ishtirak
       POSTGRES_USER: ishtirak
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ishtirak}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -30,8 +30,8 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -43,11 +43,14 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ishtirak
       SPRING_DATASOURCE_USERNAME: ishtirak
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-ishtirak}
-      ISHTIRAK_RABBITMQ_HOST: rabbitmq
-      ISHTIRAK_JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-bytes-minimum-secret}
-    ports:
-      - "8081:8081"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      JWT_SECRET: ${JWT_SECRET}
+      GATEWAY_SERVICE_TOKEN_SECRET: ${GATEWAY_SERVICE_TOKEN_SECRET}
+      SPRING_PROFILES_ACTIVE: ${CORE_JAVA_PROFILES:-}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    expose:
+      - "8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,7 +63,7 @@ services:
       ISHTIRAK_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       ISHTIRAK_REDIS_URL: redis://redis:6379/0
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -74,7 +77,8 @@ services:
       ANALYTICS_URL: http://analytics-python:8082
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-bytes-minimum-secret}
+      JWT_SECRET: ${JWT_SECRET}
+      GATEWAY_SERVICE_TOKEN_SECRET: ${GATEWAY_SERVICE_TOKEN_SECRET}
     ports:
       - "8080:8080"
     depends_on:

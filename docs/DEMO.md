@@ -8,17 +8,26 @@
 
 ```bash
 cd infra
-cp .env.example .env   # adjust JWT_SECRET for anything non-local
+cp .env.example .env   # generate JWT/service secrets before running
 docker compose up --build
 ```
 
 Smoke-test every service:
 
 ```bash
-curl localhost:8081/health   # core-java
+docker compose exec gateway-node node -e "fetch('http://core-java:8081/health').then(r=>{if(!r.ok)process.exit(1);console.log(r.status)}).catch(()=>process.exit(1))"
 curl localhost:8082/health   # analytics-python
 curl localhost:8080/health   # gateway-node
 curl localhost:3000          # web
+```
+
+Run the core-java Docker-backed smoke test:
+
+```bash
+cd ../services/core-java
+./mvnw -Dtest=Phase2ContainersTest test
+# If Docker Java negotiates the wrong API version:
+./mvnw -Ddocker.api.version=1.52 -Dtest=Phase2ContainersTest test
 ```
 
 ## Showcase flows (target — Phases 2–6)

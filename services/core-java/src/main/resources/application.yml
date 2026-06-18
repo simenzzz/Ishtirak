@@ -4,6 +4,21 @@ server:
 spring:
   application:
     name: ishtirak-core
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ishtirak}
+    username: ${SPRING_DATASOURCE_USERNAME:ishtirak}
+    password: ${SPRING_DATASOURCE_PASSWORD:ishtirak}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
 
 management:
   endpoints:
@@ -14,3 +29,14 @@ management:
     health:
       probes:
         enabled: true
+
+ishtirak:
+  gateway-service-token-secret: ${GATEWAY_SERVICE_TOKEN_SECRET}
+  jwt-secret: ${JWT_SECRET}
+  demo-password: ${DEMO_PASSWORD:}
+  outbox:
+    publish-delay-ms: 1000
+  rate-limit:
+    mutations-per-minute: 60
+    readings-per-minute: 120
+    billing-per-hour: 3

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ishtirak.dev/events/reading-flagged.schema.json",
+  "title": "ReadingFlagged",
+  "description": "Emitted by analytics-python when a reading is flagged as possible tampering.",
+  "type": "object",
+  "required": ["eventId", "eventType", "operatorId", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "reading.flagged" },
+    "operatorId": { "type": "string", "format": "uuid" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["readingId", "subscriberId", "reason", "score"],
+      "additionalProperties": false,
+      "properties": {
+        "readingId": { "type": "string", "format": "uuid" },
+        "subscriberId": { "type": "string", "format": "uuid" },
+        "reason": {
+          "type": "string",
+          "enum": ["NEGATIVE_DELTA", "ZERO_DELTA", "DROP_GT_THRESHOLD", "EXCEEDS_TIER_CAP", "ML_ANOMALY"]
+        },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

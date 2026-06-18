@@ -8,9 +8,12 @@
 > surface see [`API.md`](./API.md); for the build-out plan see
 > [`ROADMAP.md`](./ROADMAP.md).
 >
-> **Status legend:** ✅ built · ⏳ planned. Today the repo is at **Phase 1
-> (scaffolding)** — every service boots and answers `/health` + `/ready`; no
-> domain logic exists yet. Items below are marked accordingly.
+> **Status legend:** ✅ built · ⏳ planned. Today **`core-java` is built through
+> Phase 2** — the system of record (domain model, billing run, payments, RBAC +
+> JWT, tenant scoping, and the transactional outbox event publisher) is
+> implemented and tested. `analytics-python`, `gateway-node`, and `web` remain
+> scaffolds that boot and answer `/health` + `/ready` (Phases 3-5). Items below
+> are marked accordingly.
 
 Ishtirak is a multi-tenant platform for Lebanon's neighborhood diesel-generator
 operators. Each operator (the tenant) manages subscribers on amperage tiers,
@@ -41,7 +44,7 @@ product overview.
             ┌────────────────▼──────┐      ┌─────────▼─────────────────┐
             │     core-java (8081)  │      │   analytics-python (8082) │
             │  Spring Boot 3.2      │      │  FastAPI 3.12             │
-            │  SYSTEM OF RECORD     │ ⏳P2 │  theft detection +        │ ⏳P3
+            │  SYSTEM OF RECORD     │ ✅P2 │  theft detection +        │ ⏳P3
             │  subscribers, tiers,  │      │  operator analytics       │
             │  readings, billing,   │      │                           │
             │  payments, RBAC       │      │  capture store (SQLite)   │
@@ -107,9 +110,11 @@ strongest, not for novelty (see [ADR-001](#adr-001-polyglot-microservices)).
   is concrete (ADR-008): internal services accept a gateway-signed **service**
   token (`gatewayServiceAuth`), **not** the raw browser JWT, and receive the
   end-user identity as the gateway-injected trusted headers `X-Operator-Id` +
-  `X-Actor-Role` — the source every internal query filters by. Internal ports are
-  `x-internal` (not browser-reachable). JWT secret is required and validated at
-  boot (≥32 chars) — see `gateway-node/src/config.ts` and `infra/.env.example`.
+  `X-Actor-Role`. The service token carries matching identity claims, giving
+  internal services a signed value to compare before using the headers as the
+  source every internal query filters by. Internal ports are `x-internal` (not
+  browser-reachable). JWT secret is required and validated at boot (≥32 chars) —
+  see `gateway-node/src/config.ts` and `infra/.env.example`.
   The full contract is encoded in the OpenAPI specs and [API.md](./API.md).
   ⏳ middleware lands in Phase 4.
 - **Multi-tenant scoping.** Every entity, query, and event carries an
@@ -208,7 +213,9 @@ ADR-006) so it can scale horizontally.
 **Context.** Multiple services derive state from the same domain. **Decision.**
 `core-java` (PostgreSQL, Flyway-managed schema) is the **only** authoritative
 store for domain data; all domain mutations go through it and it is the sole
-event publisher. Other services hold only derived or ephemeral state.
+event publisher. Domain events are written through a transactional outbox in the
+same PostgreSQL transaction as the domain change before they are published to
+RabbitMQ. Other services hold only derived or ephemeral state.
 **Consequences.** One source of truth and one writer of domain events; no
 service reaches into another's database. Derived stores (analytics capture —
 ADR-007; Redis — ADR-006) are reconstructable from core-java.
@@ -265,8 +272,10 @@ short-lived, gateway-signed **service** token — never the raw browser JWT. The
 gateway derives the end-user identity from the verified JWT and injects it inward
 as the trusted headers `X-Operator-Id` (uuid) and `X-Actor-Role`
 (`OPERATOR_ADMIN` | `OPERATOR_STAFF` | `SUBSCRIBER`), required on every internal
-domain operation; a request missing them is rejected. Internal servers are marked
-`x-internal` (not routable from the browser). **Consequences.** There is now a
+domain operation. The service token includes matching `operatorId`, `role`, and
+optional `subscriberId` claims; a request missing or mismatching them is rejected.
+Internal servers are marked `x-internal` (not routable from the browser).
+**Consequences.** There is now a
 defined source for the "filter every query by `operatorId`" hard rule, and the
 browser-JWT-replay bypass is closed. The cost is that the gateway must mint/sign
 service tokens and reliably inject the identity headers, and deployment must keep

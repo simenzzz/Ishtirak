@@ -19,11 +19,11 @@ an **operator** (tenant):
 ```
 Operator (tenant)
   └─ User ───────── role ∈ {OPERATOR_ADMIN, OPERATOR_STAFF, SUBSCRIBER}
-  └─ Tier ───────── amperage (e.g. 5A/10A/15A), standing fee, per-kWh rate
+  └─ Tier ───────── amperage, optional tariff override, USD/LBP fees + rates
   └─ Subscriber ─── belongs to one Tier
         └─ Reading ──── cumulative kWh @ readingAt
-        └─ Invoice ──── period, kwhConsumed, amountUsd, status
-              └─ Payment ── amountUsd, method ∈ {CASH, WHISH}
+        └─ Invoice ──── period, kwhConsumed, amountUsd, amountLbp, status
+              └─ Payment ── currency, tenderedAmount, appliedUsd/Lbp, method
   └─ Outage ─────── startsAt, endsAt, reason ∈ {FUEL, MAINTENANCE, GRID, OTHER}
 ```
 
@@ -34,20 +34,23 @@ Subscriber 1───* Invoice 1───* Payment
 Operator 1───* Outage
 ```
 
-### Billing model (assumption — confirm at Phase 2)
+### Billing model
 
-> ⚠️ The event contracts fix the **invoice shape** (`kwhConsumed`, `amountUsd`,
-> `periodStart`, `periodEnd` — see
-> [`invoice-issued.schema.json`](../contracts/events/invoice-issued.schema.json))
-> but not the **pricing formula**. The design assumes:
->
-> ```
-> kwhConsumed = reading(periodEnd) − reading(periodStart)   # cumulative meter delta
-> amountUsd   = tier.standingFee + kwhConsumed × tier.perKwhRate
-> ```
->
-> Confirm the exact tariff (flat tier fee vs. metered vs. hybrid; rounding;
-> currency handling) with the product owner before implementing the billing run.
+The billing run computes consumption from cumulative meter readings and applies
+the operator's default tariff policy, unless a tier defines an override:
+
+```
+kwhConsumed = reading(periodEnd) − reading(periodStart)
+FLAT        = standingFee
+METERED     = kwhConsumed × perKwhRate
+HYBRID      = standingFee + kwhConsumed × perKwhRate
+```
+
+Tiers carry explicit USD and LBP fees/rates, so invoices store both
+`amountUsd` and `amountLbp`. Final invoice and payment-equivalent amounts use
+commercial rounding (`HALF_UP`): USD to 2 decimals and LBP to whole lira.
+Payments may be tendered in either currency and reconcile cross-currency values
+using the invoice ratio `amountLbp / amountUsd`.
 
 ## Sequence flows (the three showcase scenarios)
 
@@ -96,9 +99,9 @@ Operator ──POST /api/readings──► gateway ──► core-java
 ```
 
 > Unlike the four core-java domain events, `reading.flagged` is published by
-> **analytics-python** and consumed by the gateway. It is modeled inline in
-> [`contracts/asyncapi.yaml`](../contracts/asyncapi.yaml) rather than in
-> `contracts/events/` (which holds the formal core-java domain events).
+> **analytics-python** and consumed by the gateway. It has a first-class schema
+> in [`contracts/events/reading-flagged.schema.json`](../contracts/events/reading-flagged.schema.json),
+> and AsyncAPI references that schema directly.
 
 ### 3. Load-shedding countdown
 
@@ -137,9 +140,11 @@ All asynchronous integration goes through the RabbitMQ topic exchange
 - **Ordering.** No global ordering guarantee. Where order matters (cumulative
   meter readings), consumers order by `occurredAt` / `readingAt` and tolerate
   out-of-order arrival rather than assuming broker order.
-- **Producer.** `core-java` publishes the four domain events (ADR-004), only
-  **after** the owning DB transaction commits, to avoid emitting events for
-  rolled-back state. (`analytics-python` additionally publishes the internal
+- **Producer.** `core-java` writes the four domain events to a transactional
+  outbox in the same DB transaction as the owning domain change, then publishes
+  pending outbox rows to RabbitMQ after commit. This avoids emitting events for
+  rolled-back state and avoids losing committed events when RabbitMQ is briefly
+  unavailable. (`analytics-python` additionally publishes the internal
   `reading.flagged` risk signal — see the tampering flow above.)
 - **Validation.** Producers and consumers validate payloads against the
   [`contracts/events`](../contracts/events) JSON Schemas.
