@@ -1,17 +1,21 @@
-"""FastAPI application factory and health endpoints.
+"""FastAPI application factory, lifespan wiring, and health endpoints.
 
-The theft-detection consumer and analytics routes are wired in during Phase 3;
-this module owns app construction, lifespan, and liveness/readiness.
+The lifespan starts the RabbitMQ consumers and analytics REST surface via an
+injectable ``runtime_factory`` so tests can run the app without live infrastructure.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, Awaitable, Callable
 
 from fastapi import FastAPI
 
+from app.analytics.router import router as analytics_router
 from app.config import Settings, load_settings
+from app.runtime import Runtime, start_runtime
+
+RuntimeFactory = Callable[[Settings, FastAPI], Awaitable[Runtime | None]]
 
 
 class AppState:
@@ -22,19 +26,28 @@ class AppState:
         self.ready = False
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    runtime_factory: RuntimeFactory = start_runtime,
+) -> FastAPI:
     resolved = settings or load_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        # Phase 3 attaches the RabbitMQ consumer here. For now we are ready
-        # as soon as configuration has loaded successfully.
+        runtime = await runtime_factory(resolved, app)
         app.state.ctx.ready = True
-        yield
-        app.state.ctx.ready = False
+        try:
+            yield
+        finally:
+            app.state.ctx.ready = False
+            if runtime is not None:
+                await runtime.aclose()
 
     app = FastAPI(title="Ishtirak Analytics", version="0.1.0", lifespan=lifespan)
     app.state.ctx = AppState(resolved)
+    app.state.capture_repo = None
+    app.include_router(analytics_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

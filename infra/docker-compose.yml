@@ -47,6 +47,7 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       JWT_SECRET: ${JWT_SECRET}
       GATEWAY_SERVICE_TOKEN_SECRET: ${GATEWAY_SERVICE_TOKEN_SECRET}
+      ANALYTICS_SERVICE_TOKEN_SECRET: ${ANALYTICS_SERVICE_TOKEN_SECRET}
       SPRING_PROFILES_ACTIVE: ${CORE_JAVA_PROFILES:-}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     expose:
@@ -62,6 +63,11 @@ services:
     environment:
       ISHTIRAK_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       ISHTIRAK_REDIS_URL: redis://redis:6379/0
+      ISHTIRAK_CORE_JAVA_URL: http://core-java:8081
+      ISHTIRAK_CAPTURE_DB_PATH: /data/capture.db
+      ISHTIRAK_ANALYTICS_SERVICE_TOKEN_SECRET: ${ANALYTICS_SERVICE_TOKEN_SECRET}
+    volumes:
+      - analytics-data:/data
     ports:
       - "127.0.0.1:8082:8082"
     depends_on:
@@ -69,6 +75,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      core-java:
+        condition: service_started
 
   gateway-node:
     build: ../services/gateway-node
@@ -96,3 +104,4 @@ services:
 
 volumes:
   pgdata:
+  analytics-data:

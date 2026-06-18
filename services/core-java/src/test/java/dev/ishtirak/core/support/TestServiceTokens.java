@@ -14,13 +14,18 @@ public final class TestServiceTokens {
     }
 
     public static String signed(UUID operatorId, String role, String subscriberId, String secret) {
+        return signed(operatorId, role, subscriberId, secret, "gateway-node");
+    }
+
+    public static String signed(
+            UUID operatorId, String role, String subscriberId, String secret, String issuer) {
         try {
             String header = base64("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
             long exp = Instant.now().plusSeconds(300).getEpochSecond();
             String subscriberClaim = subscriberId == null ? "" : ",\"subscriberId\":\"" + subscriberId + "\"";
             String payload = base64("""
-                    {"iss":"gateway-node","aud":"core-java","typ":"service","exp":%d,"operatorId":"%s","role":"%s"%s}
-                    """.formatted(exp, operatorId, role, subscriberClaim));
+                    {"iss":"%s","aud":"core-java","typ":"service","exp":%d,"operatorId":"%s","role":"%s"%s}
+                    """.formatted(issuer, exp, operatorId, role, subscriberClaim));
             String signed = header + "." + payload;
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

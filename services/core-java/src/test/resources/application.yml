@@ -15,6 +15,7 @@ spring:
 
 ishtirak:
   gateway-service-token-secret: dev-gateway-service-token-secret-32
+  analytics-service-token-secret: dev-analytics-service-token-secret-32
   jwt-secret: dev-only-change-me-32-bytes-minimum-secret
   outbox:
     publish-delay-ms: 60000

@@ -32,6 +32,7 @@ management:
 
 ishtirak:
   gateway-service-token-secret: ${GATEWAY_SERVICE_TOKEN_SECRET}
+  analytics-service-token-secret: ${ANALYTICS_SERVICE_TOKEN_SECRET:}
   jwt-secret: ${JWT_SECRET}
   demo-password: ${DEMO_PASSWORD:}
   outbox:

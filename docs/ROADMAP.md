@@ -114,18 +114,29 @@ tested; coverage ≥ 80%; reviews clean.
 
 ---
 
-## Phase 3 — analytics consumer + rules-based detection + capture writer ⏳
+## Phase 3 — analytics consumer + rules-based detection + capture writer ✅ (done)
 
 **Scope.** Wire the consumer marked at `analytics-python/app/main.py` and ship
 explainable detection (ADR-005).
-- aio-pika consumer bound to `reading.recorded` (queue `analytics.reading-recorded`).
-- **Rule engine** (Phase 3a): features (kWh delta, drop vs. trailing average,
+- [x] aio-pika consumer bound to `reading.recorded` (queue `analytics.reading-recorded`),
+  plus a billing consumer bound to `invoice.issued` + `payment.received`
+  (queue `analytics.billing`).
+- [x] **Rule engine** (Phase 3a): features (kWh delta, drop vs. trailing average,
   consumption vs. tier amperage cap, zero/negative delta) → risk flag + reason
   code; per-subscriber rolling state in Redis. See
   [theft-detection pipeline](./SYSTEM_DESIGN.md#theft-detection-pipeline-rules-first).
-- Analytics REST: collection-rate + risk endpoints
-  ([API.md](./API.md#analytics-python-rest--internal-analytics)).
-- **Capture *writer*** (ADR-007): persist every consumed event + operator alert
+- [x] **`EXCEEDS_TIER_CAP` tier data**: tier amperage is fetched from core-java REST
+  (cached in Redis with TTL) using a first-class **analytics-python service
+  identity**. core-java's `ServiceTokenVerifier` now accepts a configurable map of
+  trusted issuer→secret (`gateway-node`, `analytics-python`); see the ADR-008
+  note below. Lookup failures raise (never silently disable the rule).
+- [x] **Collection-rate**: derived by consuming `invoice.issued` + `payment.received`
+  into a per-invoice ledger (payments attributed via `invoiceId`), matching the
+  AsyncAPI/SYSTEM_DESIGN intent rather than synchronous REST polling.
+- [x] Analytics REST: collection-rate + risk endpoints
+  ([API.md](./API.md#analytics-python-rest--internal-analytics)), each scoped by
+  `X-Operator-Id`.
+- [x] **Capture *writer*** (ADR-007): persist every consumed event + operator alert
   labels to a SQLite (WAL) store behind a repository interface (+ Docker volume).
   This only *records* data for later retraining — **the v1 model cold-starts**;
   no retraining happens here.
@@ -135,9 +146,31 @@ explainable detection (ADR-005).
 Testcontainers RabbitMQ + capture write); contract tests on the consumed
 payload. **Security review** for input handling + tenancy.
 
+- [x] Unit tests: config validation, capture store CRUD + idempotency, Redis state +
+  tier cache, every rule's boundary cases, engine priority, core-java client
+  (two-call tier fetch, 404 vs error), service-token format, REST endpoints +
+  operator scoping, reading.flagged contract validation, consumer dispatch +
+  **redelivery idempotency** (no double publish / double-counted state).
+- [x] Integration tests (Testcontainers RabbitMQ): reading → `reading.flagged`
+  round-trip and billing → collection-rate; skip cleanly when Docker is absent.
+- [x] core-java: `ServiceTokenVerifier` accept/reject tests for the new
+  multi-issuer auth; existing suite green.
+- [x] Coverage ≥ 80% (analytics ~94% incl. integration); `ruff` clean.
+- [ ] **Inbound analytics REST auth** is deferred to Phase 4: endpoints currently
+  trust a bare `X-Operator-Id` header (same internal trust boundary core-java
+  guards) and must require the gateway/analytics service token once the gateway
+  issues it.
+
 **Exit criteria.** Anomalous readings raise an explainable risk flag; analytics
 endpoints serve summaries; capture store records events + labels; idempotent
 under redelivery; coverage ≥ 80%.
+
+> **ADR-008 update (Phase 3).** Internal service auth is no longer single-issuer:
+> `ServiceTokenVerifier` selects the HMAC secret by the token's `iss` claim from a
+> configurable trusted-issuer map (`gateway-node` via
+> `ishtirak.gateway-service-token-secret`, `analytics-python` via the optional
+> `ishtirak.analytics-service-token-secret`). Analytics is a first-class internal
+> peer (role `OPERATOR_STAFF`) rather than sharing the gateway's secret.
 
 ---
 
