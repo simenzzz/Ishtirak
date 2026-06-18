@@ -11,6 +11,13 @@ const envSchema = z.object({
   RABBITMQ_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+  GATEWAY_SERVICE_TOKEN_SECRET: z
+    .string()
+    .min(32, "GATEWAY_SERVICE_TOKEN_SECRET must be at least 32 characters"),
+  GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET: z
+    .string()
+    .min(32, "GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET must be at least 32 characters"),
+  SERVICE_TOKEN_TTL_SECS: z.coerce.number().int().positive().default(300),
 });
 
 export type Config = Readonly<z.infer<typeof envSchema>>;

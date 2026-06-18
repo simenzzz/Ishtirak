@@ -23,6 +23,7 @@ class Settings:
     core_java_url: str
     capture_db_path: str
     analytics_service_token_secret: str
+    gateway_service_token_secret: str
     exchange: str = "ishtirak.events"
     reading_queue: str = "analytics.reading-recorded"
     billing_queue: str = "analytics.billing"
@@ -53,6 +54,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         core_java_url=_required(source, "ISHTIRAK_CORE_JAVA_URL"),
         capture_db_path=_required(source, "ISHTIRAK_CAPTURE_DB_PATH"),
         analytics_service_token_secret=_secret(source, "ISHTIRAK_ANALYTICS_SERVICE_TOKEN_SECRET"),
+        gateway_service_token_secret=_secret(source, "ISHTIRAK_GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET"),
         drop_threshold_pct=_float(source, "ANALYTICS_DROP_THRESHOLD_PCT", 0.4),
         trailing_window=_int(source, "ANALYTICS_TRAILING_WINDOW", 5),
         tier_cache_ttl_secs=_int(source, "ANALYTICS_TIER_CACHE_TTL_SECS", 3600),

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -47,6 +48,15 @@ public class SubscriberController {
     SubscriberResponse get(RequestIdentity identity, @PathVariable UUID id) {
         identity.requireStaffOrAdmin();
         return SubscriberResponse.from(subscriberService.get(identity.operatorId(), id));
+    }
+
+    @PatchMapping("/subscribers/{id}")
+    SubscriberResponse update(
+            RequestIdentity identity,
+            @PathVariable UUID id,
+            @Valid @RequestBody SubscriberService.UpdateSubscriberRequest request) {
+        identity.requireAdmin();
+        return SubscriberResponse.from(subscriberService.update(identity.operatorId(), id, request));
     }
 
     record SubscriberResponse(

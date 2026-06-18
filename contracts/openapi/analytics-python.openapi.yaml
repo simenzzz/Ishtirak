@@ -19,7 +19,7 @@ info:
 
 
     **Design-ahead-of-implementation:** only `/health` and `/ready` are built
-    today (`x-status: built`); everything else is `x-status: planned`.
+    today (`x-status: built`); everything else is `x-status: built`.
     Companion: ../../docs/API.md.
   contact: { name: Ishtirak, url: https://ishtirak.dev }
 servers:
@@ -44,7 +44,7 @@ paths:
       operationId: getCollectionRate
       summary: Collection-rate summary (paid vs. issued)
       description: Derived from `invoice.issued` + `payment.received`.
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       parameters:
         - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
@@ -68,7 +68,7 @@ paths:
       tags: [analytics]
       operationId: listRiskFlags
       summary: Tampering risk flags
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       parameters:
         - { name: subscriberId, in: query, required: false, schema: { type: string, format: uuid } }
@@ -105,7 +105,7 @@ paths:
       operationId: getRiskFlag
       summary: Risk detail for a single reading
       description: Resolves readingId within X-Operator-Id; 404 if outside the tenant.
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
@@ -133,7 +133,7 @@ paths:
         Records operator feedback on a flag. The label feeds the post-deployment
         continuous-learning loop (ADR-007) — it does not retrain the live model
         synchronously. Operator-only write, scoped to X-Operator-Id.
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       requestBody:
         required: true

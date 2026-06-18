@@ -19,7 +19,7 @@ info:
 
 
     **Design-ahead-of-implementation:** the broker topology and schemas are
-    defined; producers/consumers are wired in Phases 2–4 (`x-status: planned`).
+    defined; producers/consumers are wired in Phases 2–4 (`x-status: built`).
   contact: { name: Ishtirak, url: https://ishtirak.dev }
 
 servers:
@@ -31,7 +31,9 @@ servers:
     host: localhost:8080
     pathname: /api/ws
     protocol: ws
-    description: Gateway WebSocket endpoint (JWT-authenticated on upgrade).
+    description: Gateway WebSocket endpoint. Clients offer `ishtirak.v1` and
+      `bearer.<accessToken>` subprotocols; the gateway verifies the bearer token
+      and accepts only the constant `ishtirak.v1` protocol.
 
 defaultContentType: application/json
 
@@ -96,25 +98,25 @@ operations:
   # --- producers (core-java) ----
   coreSendReadingRecorded:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: core-java
     channel: { $ref: '#/channels/readingRecorded' }
     summary: core-java publishes after a reading is committed.
   coreSendInvoiceIssued:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: core-java
     channel: { $ref: '#/channels/invoiceIssued' }
     summary: core-java publishes one per invoice during the billing run.
   coreSendPaymentReceived:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: core-java
     channel: { $ref: '#/channels/paymentReceived' }
     summary: core-java publishes after a payment is committed.
   coreSendOutageScheduled:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: core-java
     channel: { $ref: '#/channels/outageScheduled' }
     summary: core-java publishes after an outage is committed.
@@ -122,44 +124,44 @@ operations:
   # --- consumers ----
   analyticsReceiveReadingRecorded:
     action: receive
-    x-status: planned
+    x-status: built
     x-consumed-by: analytics-python
     x-queue: analytics.reading-recorded
     channel: { $ref: '#/channels/readingRecorded' }
     summary: analytics-python scores the reading for tampering and captures it.
   analyticsReceiveInvoiceIssued:
     action: receive
-    x-status: planned
+    x-status: built
     x-consumed-by: analytics-python
     channel: { $ref: '#/channels/invoiceIssued' }
     summary: analytics-python updates the collection-rate summary.
   analyticsReceivePaymentReceived:
     action: receive
-    x-status: planned
+    x-status: built
     x-consumed-by: analytics-python
     channel: { $ref: '#/channels/paymentReceived' }
     summary: analytics-python updates the collection-rate summary.
   gatewayReceiveInvoiceIssued:
     action: receive
-    x-status: planned
+    x-status: built
     x-consumed-by: gateway-node
     channel: { $ref: '#/channels/invoiceIssued' }
     summary: gateway-node pushes a "bill ready" message to the subscriber.
   gatewayReceiveOutageScheduled:
     action: receive
-    x-status: planned
+    x-status: built
     x-consumed-by: gateway-node
     channel: { $ref: '#/channels/outageScheduled' }
     summary: gateway-node streams a live countdown to affected subscribers.
   analyticsSendReadingFlagged:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: analytics-python
     channel: { $ref: '#/channels/readingFlagged' }
     summary: analytics-python publishes a risk signal when a reading is flagged.
   gatewayReceiveReadingFlagged:
     action: receive
-    x-status: planned
+    x-status: built
     x-consumed-by: gateway-node
     channel: { $ref: '#/channels/readingFlagged' }
     summary: >
@@ -169,7 +171,7 @@ operations:
   # --- WebSocket ----
   gatewaySendOutageCountdown:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: gateway-node
     channel: { $ref: '#/channels/wsServerToClient' }
     messages:
@@ -177,7 +179,7 @@ operations:
     summary: Live outage countdown tick to a subscriber.
   gatewaySendInvoiceReady:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: gateway-node
     channel: { $ref: '#/channels/wsServerToClient' }
     messages:
@@ -185,7 +187,7 @@ operations:
     summary: Bill-ready push to a subscriber.
   gatewaySendTamperingAlert:
     action: send
-    x-status: planned
+    x-status: built
     x-emitted-by: gateway-node
     channel: { $ref: '#/channels/wsServerToClient' }
     messages:
@@ -193,7 +195,7 @@ operations:
     summary: Tampering alert push to an operator.
   clientSubscribe:
     action: receive
-    x-status: planned
+    x-status: built
     channel: { $ref: '#/channels/wsClientToServer' }
     messages:
       - { $ref: '#/channels/wsClientToServer/messages/subscribe' }

@@ -5,6 +5,7 @@ import dev.ishtirak.core.domain.ResourceStatus;
 import dev.ishtirak.core.domain.Subscriber;
 import dev.ishtirak.core.persistence.Repositories;
 import dev.ishtirak.core.persistence.SubscriberEntity;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.Clock;
@@ -13,6 +14,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SubscriberService {
@@ -52,6 +54,33 @@ public class SubscriberService {
         return subscribers.save(new SubscriberEntity(subscriber)).toDomain();
     }
 
+    @Transactional
+    public Subscriber update(UUID operatorId, UUID subscriberId, UpdateSubscriberRequest request) {
+        Subscriber current = subscribers.lockByOperatorIdAndId(operatorId, subscriberId)
+                .map(SubscriberEntity::toDomain)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Subscriber not found"));
+        UUID tierId = request.tierId() == null ? current.tierId() : request.tierId();
+        if (tiers.findByOperatorIdAndId(operatorId, tierId).isEmpty()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Tier not found");
+        }
+        Subscriber updated = new Subscriber(
+                current.id(),
+                current.operatorId(),
+                request.name() == null ? current.name() : request.name(),
+                tierId,
+                current.meterId(),
+                request.status() == null ? current.status() : request.status(),
+                current.createdAt());
+        return subscribers.save(new SubscriberEntity(updated)).toDomain();
+    }
+
     public record CreateSubscriberRequest(@NotBlank String name, @NotNull UUID tierId, String meterId) {
+    }
+
+    public record UpdateSubscriberRequest(@NotBlank String name, UUID tierId, ResourceStatus status) {
+        @AssertTrue(message = "at least one field is required")
+        public boolean isAnyFieldPresent() {
+            return name != null || tierId != null || status != null;
+        }
     }
 }

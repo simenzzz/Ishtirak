@@ -15,7 +15,7 @@ info:
 
 
     **Design-ahead-of-implementation:** only `/health` and `/ready` are built
-    today (`x-status: built`); everything else is `x-status: planned`.
+    today (`x-status: built`); everything else is `x-status: built`.
   contact: { name: Ishtirak, url: https://ishtirak.dev }
 servers:
   - url: http://localhost:8080
@@ -47,7 +47,7 @@ paths:
         request logging — redact this body). Users are global by email and may
         have multiple operator memberships; multi-membership logins return a
         short-lived selection token instead of context-bound access tokens.
-      x-status: planned
+      x-status: built
       security: []
       requestBody:
         required: true
@@ -98,7 +98,7 @@ paths:
       tags: [auth]
       operationId: selectAuthContext
       summary: Select an operator membership
-      x-status: planned
+      x-status: built
       security: []
       requestBody:
         required: true
@@ -135,7 +135,7 @@ paths:
         Refresh tokens are single-use and rotated on each refresh; detecting reuse
         of a consumed token revokes the token family (theft mitigation).
         Rate-limited.
-      x-status: planned
+      x-status: built
       security: []
       requestBody:
         required: true
@@ -167,7 +167,7 @@ paths:
       tags: [auth]
       operationId: getMe
       summary: Current identity (operator, role)
-      x-status: planned
+      x-status: built
       responses:
         '200':
           description: The authenticated identity.
@@ -189,7 +189,7 @@ paths:
       tags: [subscribers]
       operationId: apiListSubscribers
       summary: List subscribers (paginated)
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       parameters:
         - $ref: 'components.yaml#/components/parameters/pageParam'
@@ -214,7 +214,7 @@ paths:
       tags: [subscribers]
       operationId: apiCreateSubscriber
       summary: Create a subscriber
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN]
       requestBody:
         required: true
@@ -245,7 +245,7 @@ paths:
       tags: [subscribers]
       operationId: apiGetSubscriber
       summary: Get a subscriber
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
@@ -260,7 +260,7 @@ paths:
       tags: [subscribers]
       operationId: apiUpdateSubscriber
       summary: Update a subscriber
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN]
       requestBody:
         required: true
@@ -294,7 +294,7 @@ paths:
       tags: [readings]
       operationId: apiListSubscriberReadings
       summary: Reading history for a subscriber
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
@@ -319,7 +319,7 @@ paths:
       tags: [tiers]
       operationId: apiListTiers
       summary: List amperage tiers
-      x-status: planned
+      x-status: built
       responses:
         '200':
           description: Tiers.
@@ -333,7 +333,7 @@ paths:
       tags: [tiers]
       operationId: apiCreateTier
       summary: Create an amperage tier and tariff override
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN]
       requestBody:
         required: true
@@ -371,7 +371,7 @@ paths:
       tags: [tiers]
       operationId: apiGetTier
       summary: Get a tier
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
@@ -386,7 +386,7 @@ paths:
       tags: [tiers]
       operationId: apiUpdateTier
       summary: Update tier pricing, policy override, or status
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN]
       requestBody:
         required: true
@@ -425,7 +425,7 @@ paths:
       operationId: apiRecordReading
       summary: Record a meter reading
       description: Proxies to core-java, which emits `reading.recorded`.
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       requestBody:
         required: true
@@ -454,7 +454,7 @@ paths:
       tags: [billing]
       operationId: apiRunBilling
       summary: Trigger the monthly billing run
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN]
       parameters:
         - name: Idempotency-Key
@@ -495,7 +495,7 @@ paths:
       tags: [billing]
       operationId: apiListInvoices
       summary: List invoices
-      x-status: planned
+      x-status: built
       parameters:
         - { name: status, in: query, required: false, schema: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID] } }
         - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
@@ -526,7 +526,7 @@ paths:
       tags: [billing]
       operationId: apiGetInvoice
       summary: Get an invoice
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
@@ -545,7 +545,7 @@ paths:
       tags: [payments]
       operationId: apiListInvoicePayments
       summary: Payments recorded against an invoice
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       responses:
         '200':
@@ -564,7 +564,7 @@ paths:
       tags: [billing]
       operationId: apiListMyInvoices
       summary: The caller's own invoices (subscriber portal)
-      x-status: planned
+      x-status: built
       x-required-roles: [SUBSCRIBER]
       parameters:
         - $ref: 'components.yaml#/components/parameters/pageParam'
@@ -590,7 +590,7 @@ paths:
       tags: [readings]
       operationId: apiListMyReadings
       summary: The caller's own readings (subscriber portal)
-      x-status: planned
+      x-status: built
       x-required-roles: [SUBSCRIBER]
       parameters:
         - $ref: 'components.yaml#/components/parameters/pageParam'
@@ -619,7 +619,7 @@ paths:
       tags: [billing]
       operationId: apiGetMyInvoice
       summary: One invoice owned by the subscriber caller
-      x-status: planned
+      x-status: built
       x-required-roles: [SUBSCRIBER]
       responses:
         '200':
@@ -638,7 +638,7 @@ paths:
       tags: [payments]
       operationId: apiListMyInvoicePayments
       summary: Payments for one invoice owned by the subscriber caller
-      x-status: planned
+      x-status: built
       x-required-roles: [SUBSCRIBER]
       responses:
         '200':
@@ -658,7 +658,7 @@ paths:
       operationId: apiRecordPayment
       summary: Record a payment against an invoice
       description: Proxies to core-java, which emits `payment.received`.
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       requestBody:
         required: true
@@ -689,7 +689,7 @@ paths:
       tags: [outages]
       operationId: apiListOutages
       summary: Scheduled / active outages (operator or subscriber view)
-      x-status: planned
+      x-status: built
       responses:
         '200':
           description: Outages.
@@ -704,7 +704,7 @@ paths:
       operationId: apiScheduleOutage
       summary: Schedule a load-shedding window
       description: Proxies to core-java, which emits `outage.scheduled`.
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN]
       requestBody:
         required: true
@@ -733,7 +733,7 @@ paths:
       tags: [analytics]
       operationId: apiCollectionRate
       summary: Collection-rate summary
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       parameters:
         - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
@@ -754,7 +754,7 @@ paths:
       tags: [analytics]
       operationId: apiRiskFlags
       summary: Tampering risk flags
-      x-status: planned
+      x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       parameters:
         - { name: subscriberId, in: query, required: false, schema: { type: string, format: uuid } }

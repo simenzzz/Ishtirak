@@ -9,7 +9,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Awaitable, Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
 
 from app.analytics.router import router as analytics_router
 from app.config import Settings, load_settings
@@ -54,7 +55,9 @@ def create_app(
         return {"status": "ok"}
 
     @app.get("/ready")
-    async def ready() -> dict[str, bool]:
-        return {"ready": app.state.ctx.ready}
+    async def ready() -> JSONResponse:
+        if not app.state.ctx.ready:
+            return JSONResponse({"ready": False}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return JSONResponse({"ready": True})
 
     return app

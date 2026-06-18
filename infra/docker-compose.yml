@@ -20,7 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -66,6 +66,7 @@ services:
       ISHTIRAK_CORE_JAVA_URL: http://core-java:8081
       ISHTIRAK_CAPTURE_DB_PATH: /data/capture.db
       ISHTIRAK_ANALYTICS_SERVICE_TOKEN_SECRET: ${ANALYTICS_SERVICE_TOKEN_SECRET}
+      ISHTIRAK_GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET: ${GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET}
     volumes:
       - analytics-data:/data
     ports:
@@ -87,6 +88,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
       GATEWAY_SERVICE_TOKEN_SECRET: ${GATEWAY_SERVICE_TOKEN_SECRET}
+      GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET: ${GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET}
+      SERVICE_TOKEN_TTL_SECS: ${SERVICE_TOKEN_TTL_SECS:-300}
     ports:
       - "8080:8080"
     depends_on:

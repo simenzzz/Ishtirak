@@ -45,7 +45,9 @@ jobs:
         with:
           node-version: "20"
       - run: npm install
+      - run: npm audit --omit=dev --audit-level=high
       - run: npx tsc -p tsconfig.json --noEmit
+      - run: npm run lint
       - run: npm test
 
   web:

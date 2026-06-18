@@ -8,8 +8,9 @@
 > behaviour see [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md); for sequencing see
 > [`ROADMAP.md`](./ROADMAP.md).
 >
-> **Status legend:** ✅ built · ⏳ planned. Today only `/health` and `/ready` on
-> each service are ✅; the four async events are ✅ **defined** in
+> **Status legend:** ✅ built · ⏳ planned. Phase 4 implements the gateway BFF,
+> WebSocket fan-out, and analytics inbound service-token auth; the four async
+> events are ✅ **defined** in
 > [`contracts/events`](../contracts/events). Everything else is ⏳.
 >
 > **Source of truth.** This document is the human-readable companion to the
@@ -126,13 +127,13 @@ The gateway authenticates, then aggregates/proxies to the internal services.
 ### Analytics (proxied to analytics-python)
 | Method | Path | Role | Description |
 | ------ | ---- | ---- | ----------- |
-| `GET`  | `/api/analytics/collection-rate` | staff/admin | Collection-rate summary. ⏳ |
-| `GET`  | `/api/analytics/risk` | staff/admin | Tampering risk flags (filter by `subscriberId`, `minScore`). ⏳ |
+| `GET`  | `/api/analytics/collection-rate` | staff/admin | Collection-rate summary. ✅ |
+| `GET`  | `/api/analytics/risk` | staff/admin | Tampering risk flags (filter by `subscriberId`, `minScore`). ✅ |
 
 ### Real-time
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `GET`  | `/api/ws` (Upgrade) | WebSocket upgrade; JWT-authenticated. See [WebSocket protocol](#websocket-protocol). ⏳ |
+| `GET`  | `/api/ws` (Upgrade) | WebSocket upgrade; JWT-authenticated. See [WebSocket protocol](#websocket-protocol). ✅ |
 
 ### Health ✅
 | Method | Path | Description |
@@ -159,7 +160,8 @@ gateway's `/api/auth/*` will front in Phase 4.
 | `POST` | `/auth/login` | — | Exchange email/password; returns tokens or a selection token + memberships. ✅ |
 | `POST` | `/auth/select-context` | — | Exchange a selection token + membership id for access/refresh tokens. ✅ |
 | `POST` | `/auth/refresh` | — | Rotate a single-use refresh token; reuse revokes the family. ✅ |
-| `GET`/`POST` | `/subscribers`, `/subscribers/{id}` | — | List/create subscribers; subscriber detail (`GET`/`POST` only — no `PATCH`). ✅ |
+| `GET`/`POST` | `/subscribers`, `/subscribers/{id}` | — | List/create subscribers; subscriber detail. ✅ |
+| `PATCH` | `/subscribers/{id}` | — | Update subscriber name/tier/status. ✅ |
 | `GET`/`POST` | `/tiers`, `/tiers/{id}` | — | List/create tiers + pricing; tier detail. ✅ |
 | `PATCH` | `/tiers/{id}` | — | Update tier pricing / tariff override / status. ✅ |
 | `POST` | `/readings` | `reading.recorded` | Persist a reading. ✅ |
@@ -188,10 +190,10 @@ derived from the event stream; no domain mutations.
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `GET` | `/analytics/collection-rate` | Collection-rate summary (paid vs. issued) per period, from `invoice.issued` + `payment.received`. ⏳ |
-| `GET` | `/analytics/risk` | Tampering risk flags with reason codes; filter by `subscriberId`. ⏳ |
-| `GET` | `/analytics/risk/{readingId}` | Risk detail for a single reading. ⏳ |
-| `POST`| `/analytics/risk/{readingId}/label` | Operator confirm/dismiss → training label for the [continuous-learning loop](./SYSTEM_DESIGN.md#continuous-learning-loop-post-deployment). ⏳ |
+| `GET` | `/analytics/collection-rate` | Collection-rate summary (paid vs. issued) per period, from `invoice.issued` + `payment.received`. ✅ |
+| `GET` | `/analytics/risk` | Tampering risk flags with reason codes; filter by `subscriberId`. ✅ |
+| `GET` | `/analytics/risk/{readingId}` | Risk detail for a single reading. ✅ |
+| `POST`| `/analytics/risk/{readingId}/label` | Operator confirm/dismiss → training label for the [continuous-learning loop](./SYSTEM_DESIGN.md#continuous-learning-loop-post-deployment). ✅ |
 | `GET` | `/health`, `/ready` | Liveness / readiness. ✅ |
 
 This service also runs a **RabbitMQ consumer** (not an HTTP endpoint) bound to
@@ -202,14 +204,15 @@ This service also runs a **RabbitMQ consumer** (not an HTTP endpoint) bound to
 
 ## WebSocket protocol
 
-> ⏳ Phase 4.
+> ✅ Phase 4.
 
 Endpoint: `ws://localhost:8080/api/ws`. Owned by the gateway (ADR-003);
-Redis-backed fan-out (ADR-006). ⏳ Phase 4.
+Redis-backed fan-out (ADR-006). ✅ Phase 4.
 
-- **Connect & authenticate.** The client connects with its JWT (via
-  `Authorization` header or a `?token=` query param on upgrade). The gateway
-  verifies it and binds the socket to `(operatorId, subscriberId, role)`.
+- **Connect & authenticate.** The client connects with its JWT via
+  `Sec-WebSocket-Protocol: ishtirak.v1, bearer.<accessToken>`. The gateway
+  verifies the bearer subprotocol, accepts only the constant `ishtirak.v1`
+  subprotocol, and binds the socket to `(operatorId, subscriberId, role)`.
   Invalid/missing tokens are rejected at upgrade.
 - **Message envelope** (both directions):
   ```json
@@ -225,7 +228,7 @@ Redis-backed fan-out (ADR-006). ⏳ Phase 4.
 ### Server → client
 | `type` | `data` | Source | Audience |
 | ------ | ------ | ------ | -------- |
-| `outage.countdown` | `{ "outageId", "startsAt", "endsAt", "secondsRemaining" }` | `outage.scheduled` + timer | subscriber |
+| `outage.countdown` | `{ "outageId", "startsAt", "endsAt", "secondsRemaining" }` | `outage.scheduled` | subscriber |
 | `invoice.ready` | `{ "invoiceId", "amountUsd", "amountLbp", "periodEnd" }` | `invoice.issued` | subscriber |
 | `tampering.alert` | `{ "subscriberId", "readingId", "reason", "score" }` | `reading.flagged` (analytics→gateway) | operator |
 | `unauthorized` | `{ "channel", "reason" }` | server (rejected subscribe) | any |
@@ -236,9 +239,10 @@ The gateway obtains the tampering signal from the `reading.flagged` event that
 Channel access is role-gated and **server-enforced** against the socket's bound
 `(operatorId, subscriberId, role)` — a disallowed `subscribe` gets an
 `unauthorized` reply, and fan-out is never driven by the client's requested
-channel alone: subscribers receive only their own
-`outage.countdown` / `invoice.ready`; operators receive `tampering.alert` for
-their tenant.
+channel alone: subscribers receive only their own `invoice.ready` and tenant
+`outage.countdown`; operators receive `tampering.alert` for their tenant.
+`outage.countdown` is sent once per scheduled outage with `secondsRemaining`
+computed at send time; clients re-derive the countdown from `startsAt`.
 
 ---
 

@@ -2,6 +2,7 @@ package dev.ishtirak.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,7 +39,6 @@ class CoreApiTest {
 
     @Autowired
     private CoreTestData testData;
-
     @BeforeEach
     void resetData() {
         testData.reset();
@@ -68,7 +68,6 @@ class CoreApiTest {
 
         mockMvc.perform(get("/tiers").headers(headers)).andExpect(status().isUnauthorized());
     }
-
     @Test
     void runsDualCurrencyBillingAndSubscriberMeProjection() throws Exception {
         String tierId = createTier();
@@ -133,7 +132,6 @@ class CoreApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.meta.total").value(1));
     }
-
     @Test
     void rejectsReadingThatWouldBreakFutureMonotonicSequence() throws Exception {
         String tierId = createTier();
@@ -169,14 +167,38 @@ class CoreApiTest {
                 .andExpect(jsonPath("$.meta.total").value(1));
         executor.shutdownNow();
     }
-
     @Test
     void subscribersCannotUseByIdStaffEndpoints() throws Exception {
         mockMvc.perform(get("/subscribers/{id}", UUID.randomUUID())
                         .headers(headers("SUBSCRIBER", UUID.randomUUID().toString())))
                 .andExpect(status().isForbidden());
     }
+    @Test
+    void adminCanPatchSubscriberButStaffCannot() throws Exception {
+        String oldTierId = createTier();
+        String newTierId = createTier();
+        String subscriberId = createSubscriber(oldTierId);
 
+        mockMvc.perform(patch("/subscribers/{id}", subscriberId)
+                        .headers(headers("OPERATOR_STAFF", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Updated"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/subscribers/{id}", subscriberId)
+                        .headers(headers("OPERATOR_ADMIN", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Updated","tierId":"%s","status":"INACTIVE"}
+                                """.formatted(newTierId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Updated"))
+                .andExpect(jsonPath("$.tierId").value(newTierId))
+                .andExpect(jsonPath("$.status").value("INACTIVE"))
+                .andExpect(jsonPath("$.operatorId").doesNotExist());
+    }
     @Test
     void getsTierByIdFromPublishedContract() throws Exception {
         String tierId = createTier();
@@ -208,7 +230,6 @@ class CoreApiTest {
                 .andReturn();
         return idFrom(result);
     }
-
     private String createSubscriber(String tierId) throws Exception {
         MvcResult result = mockMvc.perform(post("/subscribers")
                         .headers(headers("OPERATOR_ADMIN", null))

@@ -7,11 +7,9 @@ issuer ``analytics-python``.
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
 import time
+
+from app.analytics.jws import encode_segment, sign
 
 ISSUER = "analytics-python"
 AUDIENCE = "core-java"
@@ -20,8 +18,8 @@ AUDIENCE = "core-java"
 def sign_service_token(
     secret: str, operator_id: str, role: str = "OPERATOR_STAFF", ttl_secs: int = 300
 ) -> str:
-    header = _segment({"alg": "HS256", "typ": "JWT"})
-    payload = _segment(
+    header = encode_segment({"alg": "HS256", "typ": "JWT"})
+    payload = encode_segment(
         {
             "iss": ISSUER,
             "aud": AUDIENCE,
@@ -32,15 +30,4 @@ def sign_service_token(
         }
     )
     signing_input = f"{header}.{payload}"
-    signature = hmac.new(
-        secret.encode("utf-8"), signing_input.encode("utf-8"), hashlib.sha256
-    ).digest()
-    return f"{signing_input}.{_b64(signature)}"
-
-
-def _segment(obj: dict[str, object]) -> str:
-    return _b64(json.dumps(obj, separators=(",", ":")).encode("utf-8"))
-
-
-def _b64(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    return f"{signing_input}.{sign(signing_input, secret)}"

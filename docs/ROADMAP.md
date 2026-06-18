@@ -156,10 +156,8 @@ payload. **Security review** for input handling + tenancy.
 - [x] core-java: `ServiceTokenVerifier` accept/reject tests for the new
   multi-issuer auth; existing suite green.
 - [x] Coverage ≥ 80% (analytics ~94% incl. integration); `ruff` clean.
-- [ ] **Inbound analytics REST auth** is deferred to Phase 4: endpoints currently
-  trust a bare `X-Operator-Id` header (same internal trust boundary core-java
-  guards) and must require the gateway/analytics service token once the gateway
-  issues it.
+- [x] **Inbound analytics REST auth**: endpoints require the gateway-signed
+  service token plus matching trusted identity headers.
 
 **Exit criteria.** Anomalous readings raise an explainable risk flag; analytics
 endpoints serve summaries; capture store records events + labels; idempotent
@@ -174,17 +172,23 @@ under redelivery; coverage ≥ 80%.
 
 ---
 
-## Phase 4 — gateway aggregation/proxy + JWT + WebSocket ⏳
+## Phase 4 — gateway aggregation/proxy + JWT + WebSocket ✅
 
 **Scope.** Implement the BFF behind the Phase-4 markers in `app.ts`/`server.ts`.
-- JWT verification middleware (`jsonwebtoken`); derive `operatorId`/role, forward
+- [x] JWT verification middleware (`jsonwebtoken`); derive `operatorId`/role, forward
   inward (ADR-003).
-- REST aggregation/proxy to core-java + analytics for the
+- [x] REST aggregation/proxy to core-java + analytics for the
   [public API](./API.md#gateway-bff--public-api).
-- WebSocket server (`ws`) with JWT-authenticated handshake; RabbitMQ consumer
-  (`amqplib`) for `outage.scheduled` + `invoice.issued`; Redis (`ioredis`)
+- [x] WebSocket server (`ws`) with JWT-authenticated handshake using
+  `Sec-WebSocket-Protocol: bearer.<token>`; RabbitMQ consumer (`amqplib`) for
+  `outage.scheduled`, `invoice.issued`, and `reading.flagged`; Redis (`ioredis`)
   fan-out for the [WebSocket protocol](./API.md#websocket-protocol).
-- Outage countdown timer + tampering-alert relay.
+- [x] Single outage countdown push per `outage.scheduled` event; tampering-alert
+  relay from `reading.flagged`.
+- [x] Analytics inbound service-token auth and contract-aligned analytics REST
+  shapes.
+- [x] Minimal core-java `PATCH /subscribers/{id}` support so the gateway contract
+  is honored end to end.
 
 **Testing.** Unit (auth middleware, message mappers — extend the
 `ReadinessProbe`-style injectable pattern in `app.ts`); integration (proxy +
