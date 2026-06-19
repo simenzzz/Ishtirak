@@ -1,16 +1,25 @@
 # Demo runbook
 
-> **Status:** Phase 1 (scaffolding). The three showcase flows below are the
-> target for the v1 vertical slice — they are **not wired yet**. This file is the
-> script we build toward in Phases 2–6.
+> **Status:** Phase 5 UI is wired. The operator dashboard and subscriber portal
+> talk only to the gateway BFF at `http://localhost:8080`; Playwright E2E
+> automation is deferred to Phase 6.
 
 ## Bring up the stack
 
 ```bash
 cd infra
 cp .env.example .env   # generate JWT/service secrets before running
-docker compose up --build
+CORE_JAVA_PROFILES=dev DEMO_PASSWORD='replace-with-12-plus-chars' docker compose up --build
 ```
+
+The dev seed profile creates demo users:
+
+- `admin@ishtirak.local`
+- `staff@ishtirak.local`
+- `subscriber@ishtirak.local`
+
+Use the same `DEMO_PASSWORD` for all three. The password must be at least 12
+characters.
 
 Smoke-test every service:
 
@@ -30,21 +39,46 @@ cd ../services/core-java
 ./mvnw -Ddocker.api.version=1.52 -Dtest=Phase2ContainersTest test
 ```
 
-## Showcase flows (target — Phases 2–6)
+## Auth & session model
+
+The browser never holds the refresh token: on login/select-context the gateway
+moves it into an HttpOnly `ishtirak.refresh` cookie (stripped from the JSON body)
+and the web keeps only the short-lived access token in memory. A page reload
+re-mints the access token from the cookie via `POST /api/auth/refresh`; **Sign
+out** calls `POST /api/auth/logout` to clear it. The gateway allows credentialed
+requests only from `WEB_ORIGIN` (default `http://localhost:3000`) via CORS, and
+sets the cookie `Secure` by default (`COOKIE_SECURE`; browsers honour Secure on
+`localhost`). Set `COOKIE_SECURE=false` only for a non-localhost plain-HTTP setup.
+
+## Showcase flows
 
 ### 1. Billing run
-Operator triggers the monthly billing run → `core-java` issues invoices in one
-transaction and emits `invoice.issued` → `gateway-node` pushes "your bill is
-ready" over WebSocket → `analytics-python` recomputes the collection-rate summary.
+
+1. Open `http://localhost:3000/login`.
+2. Sign in as `admin@ishtirak.local`.
+3. Go to **Billing**, choose the period, and run billing.
+4. Open **Analytics** and confirm the collection-rate cards refresh from the
+   gateway analytics endpoint.
+5. In a second browser session, sign in as `subscriber@ishtirak.local` and keep
+   **Bill** open. The `invoice.ready` WebSocket push triggers a REST refresh so
+   the latest bill appears with USD and LBP totals.
 
 ### 2. Tampering catch
-Operator records a meter reading → `core-java` emits `reading.recorded` →
-`analytics-python` scores it for tampering → an anomalous reading raises a risk
-flag → `gateway-node` alerts the operator in real time.
+
+1. Stay signed in as `admin@ishtirak.local` or `staff@ishtirak.local`.
+2. Go to **Readings** or open a subscriber and record an anomalous meter value.
+3. `analytics-python` scores the `reading.recorded` event.
+4. Keep **Analytics** open and confirm the live tampering alert appears in the
+   alert strip with reason and score.
 
 ### 3. Load-shedding countdown
-Operator schedules an outage → `core-java` emits `outage.scheduled` →
-`gateway-node` streams a live countdown to every affected subscriber.
+
+1. Sign in as `admin@ishtirak.local`.
+2. Go to **Outages** and schedule an outage.
+3. In a second browser session signed in as `subscriber@ishtirak.local`, open
+   **Outage**.
+4. The `outage.countdown` WebSocket push seeds the portal countdown, and the
+   browser ticks the remaining time locally.
 
 ## Phase 1 status (done)
 

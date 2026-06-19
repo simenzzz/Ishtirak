@@ -201,28 +201,44 @@ unauthenticated access rejected; coverage ≥ 80%.
 
 ---
 
-## Phase 5 — web operator dashboard + subscriber portal ⏳
+## Phase 5 — web operator dashboard + subscriber portal ✅
 
 **Scope.** Replace the placeholder shell (Phase-5 marker in `App.tsx`).
-- React Router routes; API client (auth/token handling) + WebSocket client with
-  reconnect/backfill.
-- **Operator dashboard**: subscribers, readings, billing run, invoices/payments,
+- [x] React Router routes; API client with auth/token handling and refresh retry.
+- [x] WebSocket client with authenticated subprotocols, reconnect, role-channel
+  subscription, and REST backfill callbacks.
+- [x] **Operator dashboard**: subscribers, tiers, readings, billing run, invoices/payments,
   outages, analytics (collection rate, risk alerts).
-- **Subscriber portal**: current bill, consumption history, live outage
+- [x] **Subscriber portal**: current bill, consumption history, live outage
   countdown.
+- [x] Tailwind v4 Vite styling, route guards, gateway-only API base URL handling,
+  and **HttpOnly refresh-cookie auth**: the refresh token lives only in a
+  gateway-set `ishtirak.refresh` cookie (the gateway strips it from auth response
+  bodies and reads it back on refresh); the browser keeps only the short-lived
+  access token in memory and re-mints it from the cookie on reload. Adds
+  credentialed CORS (`WEB_ORIGIN`) on the gateway and `POST /api/auth/logout`.
+  Server-side refresh revocation on logout is deferred to Phase 6 (needs a
+  core-java endpoint).
+- [ ] Playwright E2E for the three showcase flows is deferred to Phase 6; this
+  phase covers the gate with Vitest + React Testing Library and mocked gateway/WS.
 
-**Testing.** Unit/component (Vitest + React Testing Library); E2E (Playwright)
-covering the three [showcase flows](./SYSTEM_DESIGN.md#sequence-flows-the-three-showcase-scenarios).
-**Code review** required.
+**Testing.** Unit/component/integration-style tests (Vitest + React Testing
+Library) cover auth branches, role redirects, API refresh/error handling,
+WebSocket subscription/parsing, countdown derivation, operator forms, live alerts,
+bill-ready refresh, and subscriber history. **Code review** and **security review**
+required because this phase touches auth/token handling, RBAC-gated UI, payments,
+and WebSocket protocol use.
 
 **Exit criteria.** Both UIs functional against the gateway; real-time updates
-render; E2E for the three flows green; coverage ≥ 80%.
+render; coverage ≥ 80%. Playwright E2E remains unchecked until Phase 6.
 
 ---
 
 ## Phase 6 — Hardening ⏳
 
 **Scope.** Production-readiness.
+- [ ] Playwright E2E for the three showcase flows from Phase 5 against the full
+  docker-compose stack.
 - **Observability**: metrics, tracing, structured-log aggregation across services.
 - **Initial ML detection (3b, cold-start)**: add scikit-learn; IsolationForest on
   the same feature vector, complementing the rules (ADR-005).
@@ -230,7 +246,11 @@ render; E2E for the three flows green; coverage ≥ 80%.
   hardening; graceful degradation.
 - **Performance**: load-test the billing run, the reading stream, and WS fan-out.
 - **Security**: full `security-reviewer` sweep; secret rotation; rate limiting on
-  gateway endpoints.
+  gateway endpoints; **server-side refresh-token revocation on logout** (core-java
+  endpoint, called by the gateway when clearing the cookie); and, for a
+  cross-*site* web/gateway deployment, `SameSite=None; Secure` cookies plus CSRF
+  protection on `POST /api/auth/refresh` (today's `SameSite=Strict` suits the
+  same-site dev/intended deployment).
 
 **Exit criteria.** Observability in place; DLQ/retry proven; ML detector deployed
 alongside rules; security sweep clean.
