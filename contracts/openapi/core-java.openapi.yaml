@@ -427,10 +427,10 @@ paths:
                 readingAt: { type: string, format: date-time }
       responses:
         '201':
-          description: Recorded reading (matches the emitted event payload).
+          description: Recorded reading.
           content:
             application/json:
-              schema: { $ref: '../events/reading-recorded.schema.json#/properties/payload' }
+              schema: { $ref: 'components.yaml#/components/schemas/Reading' }
         '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
         '404': { $ref: 'components.yaml#/components/responses/NotFound' }

@@ -747,10 +747,12 @@ paths:
                 reason: { type: string, enum: [FUEL, MAINTENANCE, GRID, OTHER] }
       responses:
         '201':
-          description: Scheduled outage.
+          description: >
+            Scheduled outage. Proxies core-java's create response, which mirrors
+            the emitted `outage.scheduled` event payload (`outageId`, not `id`).
           content:
             application/json:
-              schema: { $ref: 'components.yaml#/components/schemas/Outage' }
+              schema: { $ref: '../events/outage-scheduled.schema.json#/properties/payload' }
         '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
         '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
