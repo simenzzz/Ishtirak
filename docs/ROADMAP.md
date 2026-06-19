@@ -251,6 +251,25 @@ render; coverage ≥ 80%. Playwright E2E remains unchecked until Phase 6.
   cross-*site* web/gateway deployment, `SameSite=None; Secure` cookies plus CSRF
   protection on `POST /api/auth/refresh` (today's `SameSite=Strict` suits the
   same-site dev/intended deployment).
+  - **What "cross-site" means here** (the trigger to switch to `SameSite=None`):
+    only the relationship between the **browser's web-app origin** and the
+    **gateway origin** matters — the cookie only ever travels between those two.
+    Postgres/Redis/RabbitMQ and even core-java/analytics are irrelevant (the
+    browser never contacts them, so their hosts/IPs don't affect this). "Site"
+    means scheme + registrable domain (eTLD+1); **ports and subdomains do not
+    matter**. Note this is distinct from *origin*: `localhost:3000` ↔
+    `localhost:8080` is cross-*origin* (hence the gateway CORS) but still
+    same-*site*, so `SameSite=Strict` works.
+    - **Stays same-site** (Strict works, no CSRF needed): web + gateway on the
+      same registrable domain — e.g. `app.example.com` + `api.example.com`,
+      `example.com` + `example.com/api`, or `localhost:3000` + `localhost:8080`.
+    - **Becomes cross-site** (needs `SameSite=None; Secure` + CSRF): different
+      registrable domains (`app.example.com` + `gw.othercdn.net`), different
+      scheme (`http` ↔ `https`), or **two different bare IPs** (each IP is its
+      own site — but same IP, different ports stays same-site).
+  - **Recommended prod setup** that avoids all of this: serve web and gateway
+    under one registrable domain over HTTPS (`app.example.com` + `api.example.com`,
+    or a single host with the gateway under `/api`).
 
 **Exit criteria.** Observability in place; DLQ/retry proven; ML detector deployed
 alongside rules; security sweep clean.
