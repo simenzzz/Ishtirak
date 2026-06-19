@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { REFRESH_COOKIE_NAME } from "../auth/cookies.js";
-import { captureRefreshToken, requireRefreshCookie } from "./authRoutes.js";
+import { captureRefreshToken, makeLogoutHandler, requireRefreshCookie } from "./authRoutes.js";
 
 const config = {
   PORT: 8080,
@@ -64,5 +64,46 @@ describe("requireRefreshCookie", () => {
     requireRefreshCookie({ headers: { cookie: `${REFRESH_COOKIE_NAME}=rt` } } as never, res as never, next);
     expect(next).toHaveBeenCalledOnce();
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe("makeLogoutHandler", () => {
+  const newRes = () => ({
+    clearCookie: vi.fn(),
+    status: vi.fn().mockReturnThis(),
+    end: vi.fn(),
+  });
+
+  it("clears the cookie and revokes the token server-side when present", async () => {
+    const revoke = vi.fn().mockResolvedValue(undefined);
+    const res = newRes();
+    await makeLogoutHandler(config, revoke)(
+      { headers: { cookie: `${REFRESH_COOKIE_NAME}=rt` } } as never,
+      res as never,
+    );
+    expect(res.clearCookie).toHaveBeenCalledWith(REFRESH_COOKIE_NAME, expect.objectContaining({ httpOnly: true }));
+    expect(revoke).toHaveBeenCalledWith(config, "rt");
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.end).toHaveBeenCalledOnce();
+  });
+
+  it("still clears the cookie and returns 204 when revocation fails", async () => {
+    const revoke = vi.fn().mockRejectedValue(new Error("core-java down"));
+    const res = newRes();
+    await makeLogoutHandler(config, revoke)(
+      { headers: { cookie: `${REFRESH_COOKIE_NAME}=rt` } } as never,
+      res as never,
+    );
+    expect(res.clearCookie).toHaveBeenCalledOnce();
+    expect(res.status).toHaveBeenCalledWith(204);
+  });
+
+  it("skips revocation when no refresh cookie is present", async () => {
+    const revoke = vi.fn();
+    const res = newRes();
+    await makeLogoutHandler(config, revoke)({ headers: {} } as never, res as never);
+    expect(revoke).not.toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalledOnce();
+    expect(res.status).toHaveBeenCalledWith(204);
   });
 });

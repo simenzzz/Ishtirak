@@ -64,6 +64,56 @@ jobs:
       - run: npm run build
       - run: npm test
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generate stack secrets
+        working-directory: infra
+        run: |
+          cp .env.example .env
+          {
+            echo "JWT_SECRET=$(openssl rand -base64 48)"
+            echo "GATEWAY_SERVICE_TOKEN_SECRET=$(openssl rand -base64 48)"
+            echo "GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET=$(openssl rand -base64 48)"
+            echo "ANALYTICS_SERVICE_TOKEN_SECRET=$(openssl rand -base64 48)"
+            echo "CORE_JAVA_PROFILES=dev"
+            echo "DEMO_PASSWORD=ishtirak-demo-password"
+          } >> .env
+      - name: Bring up the stack
+        working-directory: infra
+        run: docker compose up -d --build
+      - name: Wait for the stack to be ready (real login through the gateway)
+        working-directory: infra
+        env:
+          DEMO_PASSWORD: ishtirak-demo-password
+        run: ./wait-for-login.sh
+      - name: Install Playwright
+        working-directory: web
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+      - name: Run E2E
+        working-directory: web
+        env:
+          DEMO_PASSWORD: ishtirak-demo-password
+          E2E_BASE_URL: http://localhost:3000
+        run: npm run test:e2e
+      - name: Collect stack logs
+        if: always()
+        working-directory: infra
+        run: docker compose logs > ../e2e-stack.log; docker compose down -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-artifacts
+          path: |
+            web/playwright-report
+            e2e-stack.log
+
   contracts:
     runs-on: ubuntu-latest
     steps:

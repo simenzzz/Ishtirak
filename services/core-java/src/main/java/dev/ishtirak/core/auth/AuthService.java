@@ -102,6 +102,17 @@ public class AuthService {
         return issueTokens(user, membership, current.familyId());
     }
 
+    /**
+     * Revoke the refresh-token family behind {@code refreshToken} so logout invalidates
+     * the credential server-side, not just in the browser. Unknown or already-revoked
+     * tokens are a no-op — we never reveal whether a token exists.
+     */
+    @Transactional
+    public void logout(String refreshToken) {
+        refreshTokens.lockByTokenHash(hash(refreshToken))
+                .ifPresent(token -> revokeFamily(token.familyId()));
+    }
+
     private List<MembershipView> membershipViews(UUID userId) {
         return memberships.findByUserIdAndStatus(userId, ResourceStatus.ACTIVE).stream()
                 .map(membership -> new MembershipView(

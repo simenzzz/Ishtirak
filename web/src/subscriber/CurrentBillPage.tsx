@@ -24,7 +24,7 @@ export function CurrentBillPage() {
       <header className="page-header"><div><p className="eyebrow">Current bill</p><h2>Latest invoice</h2></div></header>
       <DataState loading={invoices.loading} error={invoices.error}>
         {current ? (
-          <article className="bill-panel">
+          <article className="bill-panel" data-testid="current-bill">
             <strong>{formatDual(current.amountUsd, current.amountLbp)}</strong>
             <span>{formatDate(current.periodStart)} - {formatDate(current.periodEnd)}</span>
             <small>{current.kwhConsumed} kWh · {current.status}</small>

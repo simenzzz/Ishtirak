@@ -135,6 +135,33 @@ paths:
         '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
 
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke a refresh-token family (server-side logout)
+      description: >
+        Revokes the whole token family behind the supplied refresh token so the
+        credential cannot be used again. Idempotent — an unknown or already-revoked
+        token returns 204 and never reveals whether the token existed. Public — no
+        service token or identity headers.
+      x-status: built
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '204':
+          description: The token family was revoked (or the token did not exist).
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+
   /subscribers:
     parameters:
       - $ref: 'components.yaml#/components/parameters/operatorIdHeader'

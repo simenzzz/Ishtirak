@@ -4,9 +4,49 @@ import { type Redis } from "ioredis";
 import { errorBody } from "../auth/authMiddleware.js";
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from "../auth/cookies.js";
 import { type Config } from "../config.js";
+import { logger } from "../logger.js";
 import { fixedWindowRateLimit } from "../rateLimit.js";
 import { forward } from "./forward.js";
 import { loginBodySchema, selectContextBodySchema } from "./validation.js";
+
+/** Best-effort server-side revocation: ask core-java to revoke the token family. */
+export async function revokeRefreshToken(config: Config, token: string): Promise<void> {
+  const url = new URL("/auth/logout", config.CORE_JAVA_URL);
+  // Bounded: a slow/hung core-java must never block clearing the cookie and returning
+  // 204, which is the whole point of treating revocation as best-effort.
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ refreshToken: token }),
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!response.ok) {
+    throw new Error(`core-java logout returned ${response.status}`);
+  }
+}
+
+/**
+ * Logout always clears the browser's refresh cookie so the user is logged out even if
+ * core-java is unreachable; revocation of the refresh-token family is best-effort and
+ * its failure is logged but never blocks the 204.
+ */
+export function makeLogoutHandler(
+  config: Config,
+  revoke: (config: Config, token: string) => Promise<void> = revokeRefreshToken,
+) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const token = readRefreshCookie(req);
+    clearRefreshCookie(res, config);
+    if (token) {
+      try {
+        await revoke(config, token);
+      } catch (error) {
+        logger.error({ err: error }, "refresh-token revocation failed; cookie cleared");
+      }
+    }
+    res.status(204).end();
+  };
+}
 
 /**
  * Move the refresh token out of the JSON body and into an HttpOnly cookie so it
@@ -78,8 +118,5 @@ export function registerAuthRoutes(router: Router, config: Config, redis?: Redis
       onResponse,
     }),
   );
-  router.post("/auth/logout", limiter, (_req: Request, res: Response) => {
-    clearRefreshCookie(res, config);
-    res.status(204).end();
-  });
+  router.post("/auth/logout", limiter, makeLogoutHandler(config));
 }

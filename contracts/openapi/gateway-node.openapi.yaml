@@ -173,11 +173,13 @@ paths:
     post:
       tags: [auth]
       operationId: logout
-      summary: Clear the refresh-token cookie
+      summary: Log out — clear the cookie and revoke the refresh-token family
       description: >
-        Clears the HttpOnly `ishtirak.refresh` cookie in the browser. Idempotent;
-        succeeds whether or not a session was active. Server-side refresh-token
-        revocation is deferred (no core-java endpoint yet). Rate-limited.
+        Clears the HttpOnly `ishtirak.refresh` cookie in the browser and, when a
+        refresh cookie was present, calls core-java to revoke the whole refresh-token
+        family server-side (best-effort: revocation failure is logged but still
+        returns 204, so logout always succeeds for the browser). Idempotent;
+        succeeds whether or not a session was active. Rate-limited.
       x-status: built
       security: []
       responses:

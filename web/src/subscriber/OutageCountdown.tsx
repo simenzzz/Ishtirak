@@ -31,7 +31,7 @@ export function OutageCountdown() {
       <header className="page-header"><div><p className="eyebrow">Live outage</p><h2>Countdown</h2></div></header>
       <DataState loading={outages.loading} error={outages.error}>
         {seed ? (
-          <article className="countdown-panel">
+          <article className="countdown-panel" data-testid="outage-countdown">
             <strong>{secondsToClock(seconds)}</strong>
             <span>{formatDateTime(seed.startsAt)} - {formatDateTime(seed.endsAt)}</span>
           </article>

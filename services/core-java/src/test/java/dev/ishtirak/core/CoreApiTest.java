@@ -200,6 +200,26 @@ class CoreApiTest {
                 .andExpect(jsonPath("$.operatorId").doesNotExist());
     }
     @Test
+    void logoutReturnsNoContentForAnyRefreshToken() throws Exception {
+        mockMvc.perform(post("/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"some-opaque-token"}
+                                """))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void logoutRejectsBlankRefreshToken() throws Exception {
+        mockMvc.perform(post("/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":""}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void getsTierByIdFromPublishedContract() throws Exception {
         String tierId = createTier();
 

@@ -5,8 +5,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -30,6 +32,12 @@ public class AuthController {
     @PostMapping("/auth/refresh")
     TokenPair refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refresh(request.refreshToken());
+    }
+
+    @PostMapping("/auth/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request.refreshToken());
     }
 
     record LoginRequest(@NotNull @Email String email, @NotBlank String password) {

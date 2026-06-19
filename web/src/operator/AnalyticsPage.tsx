@@ -52,7 +52,7 @@ export function AlertsFeed() {
     return () => window.removeEventListener("ishtirak:ws", listener);
   }, []);
   return (
-    <section className="live-strip">
+    <section className="live-strip" data-testid="tampering-alerts">
       <strong>Live tampering alerts</strong>
       {alerts.length === 0 ? <span>No alerts received in this session</span> : alerts.map((alert) => (
         <span key={alert.readingId}>{alert.reason} · {Math.round(alert.score * 100)}% · {alert.subscriberId}</span>

@@ -77,6 +77,23 @@ class AuthServiceTest {
     }
 
     @Test
+    void logoutRevokesTheTokenFamilyAndPreventsRefresh() {
+        UserEntity user = seedUser("logout@example.com");
+        seedMembership(user.id(), CoreTestData.OPERATOR_ID, ActorRole.OPERATOR_ADMIN);
+        LoginResult login = authService.login("logout@example.com", "password123");
+        TokenPair rotated = authService.refresh(login.refreshToken());
+
+        authService.logout(rotated.refreshToken());
+
+        assertThatThrownBy(() -> authService.refresh(rotated.refreshToken())).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void logoutWithUnknownTokenIsANoOp() {
+        authService.logout("this-token-was-never-issued");
+    }
+
+    @Test
     void concurrentRefreshAttemptsDoNotIssueTwoUsableFamilies() throws Exception {
         UserEntity user = seedUser("race@example.com");
         seedMembership(user.id(), CoreTestData.OPERATOR_ID, ActorRole.OPERATOR_ADMIN);

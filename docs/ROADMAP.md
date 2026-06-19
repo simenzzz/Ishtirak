@@ -219,8 +219,9 @@ unauthenticated access rejected; coverage ≥ 80%.
   credentialed CORS (`WEB_ORIGIN`) on the gateway and `POST /api/auth/logout`.
   Server-side refresh revocation on logout is deferred to Phase 6 (needs a
   core-java endpoint).
-- [ ] Playwright E2E for the three showcase flows is deferred to Phase 6; this
-  phase covers the gate with Vitest + React Testing Library and mocked gateway/WS.
+- [x] Playwright E2E for the three showcase flows landed in Phase 6 (see below);
+  this phase covered the gate with Vitest + React Testing Library and mocked
+  gateway/WS.
 
 **Testing.** Unit/component/integration-style tests (Vitest + React Testing
 Library) cover auth branches, role redirects, API refresh/error handling,
@@ -236,21 +237,37 @@ render; coverage ≥ 80%. Playwright E2E remains unchecked until Phase 6.
 
 ## Phase 6 — Hardening ⏳
 
-**Scope.** Production-readiness.
-- [ ] Playwright E2E for the three showcase flows from Phase 5 against the full
-  docker-compose stack.
-- **Observability**: metrics, tracing, structured-log aggregation across services.
-- **Initial ML detection (3b, cold-start)**: add scikit-learn; IsolationForest on
-  the same feature vector, complementing the rules (ADR-005).
-- **Resilience**: dead-letter queues + retry/backoff for consumers; idempotency
-  hardening; graceful degradation.
-- **Performance**: load-test the billing run, the reading stream, and WS fan-out.
-- **Security**: full `security-reviewer` sweep; secret rotation; rate limiting on
-  gateway endpoints; **server-side refresh-token revocation on logout** (core-java
-  endpoint, called by the gateway when clearing the cookie); and, for a
-  cross-*site* web/gateway deployment, `SameSite=None; Secure` cookies plus CSRF
+**Scope.** Production-readiness. This phase is delivered as a **focused subset** — the
+high-value, well-scoped items below — with observability, ML detection, and
+performance load-testing consciously deferred as over-engineering for the v1 demo.
+
+- [x] **Playwright E2E** for the three showcase flows from Phase 5 against the full
+  docker-compose stack: config + `web/e2e/` specs (billing, tampering, outage) using
+  two browser contexts for the cross-user flows, a `test:e2e` script, an `e2e` CI job
+  that brings up the seeded stack, and `web/e2e/README.md`. (Specs run against the
+  live stack + browser binaries; they are excluded from the Vitest unit run.)
+- [x] **Resilience — dead-letter queues + retry/backoff for consumers**: gateway
+  (amqplib) and analytics (aio-pika) consumers declare a per-service DLX/DLQ; poison
+  messages dead-letter immediately, transient failures retry once then dead-letter
+  (removing the prior infinite-requeue loop). Idempotency/dedupe was already solid.
+- [x] **Security — server-side refresh-token revocation on logout**: core-java
+  `POST /auth/logout` revokes the refresh-token family; the gateway calls it on
+  logout (best-effort) while always clearing the cookie. (Gateway endpoint rate
+  limiting was already present from Phase 4: auth 10/min, API 300/min.)
+- [ ] **Observability**: metrics, tracing, structured-log aggregation across services.
+  Deferred (heavy infra, low demo value).
+- [ ] **Initial ML detection (3b, cold-start)**: add scikit-learn; IsolationForest on
+  the same feature vector, complementing the rules (ADR-005). Deferred — the v1 model
+  cold-starts with no training data and the capture store does not persist feature
+  vectors, so the demo value is low.
+- [ ] **Resilience — remaining**: further idempotency hardening and graceful
+  degradation beyond the DLQ/retry above.
+- [ ] **Performance**: load-test the billing run, the reading stream, and WS fan-out.
+  Deferred (no concrete scale targets for the demo).
+- [ ] **Security — remaining**: full `security-reviewer` sweep; secret rotation; and,
+  for a cross-*site* web/gateway deployment, `SameSite=None; Secure` cookies plus CSRF
   protection on `POST /api/auth/refresh` (today's `SameSite=Strict` suits the
-  same-site dev/intended deployment).
+  same-site dev/intended deployment, so this stays deferred).
   - **What "cross-site" means here** (the trigger to switch to `SameSite=None`):
     only the relationship between the **browser's web-app origin** and the
     **gateway origin** matters — the cookie only ever travels between those two.

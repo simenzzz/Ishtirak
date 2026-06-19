@@ -17,6 +17,7 @@ from app.capture.models import CapturedEvent, InvoiceLedgerEntry
 from app.capture.repository import CaptureRepository
 from app.clock import now_iso
 from app.config import INVOICE_ISSUED_KEY, PAYMENT_RECEIVED_KEY
+from app.consumer.dispatch import PoisonMessage, dispatch
 from app.consumer.messages import InvoiceIssuedEvent, PaymentReceivedEvent
 
 logger = logging.getLogger(__name__)
@@ -66,19 +67,20 @@ class BillingPipeline:
 
 
 def make_billing_handler(pipeline: BillingPipeline):
+    async def handle(raw: str) -> None:
+        try:
+            data = json.loads(raw)
+            event_type = data.get("eventType")
+            if event_type == INVOICE_ISSUED_KEY:
+                await pipeline.process_invoice(InvoiceIssuedEvent.model_validate(data), raw)
+            elif event_type == PAYMENT_RECEIVED_KEY:
+                await pipeline.process_payment(PaymentReceivedEvent.model_validate(data), raw)
+            else:
+                raise PoisonMessage(f"unknown billing message type {event_type!r}")
+        except (ValidationError, json.JSONDecodeError) as exc:
+            raise PoisonMessage(f"invalid billing message: {exc}") from exc
+
     async def handler(message: aio_pika.abc.AbstractIncomingMessage) -> None:
-        async with message.process(requeue=False):
-            raw = message.body.decode("utf-8")
-            try:
-                data = json.loads(raw)
-                event_type = data.get("eventType")
-                if event_type == INVOICE_ISSUED_KEY:
-                    await pipeline.process_invoice(InvoiceIssuedEvent.model_validate(data), raw)
-                elif event_type == PAYMENT_RECEIVED_KEY:
-                    await pipeline.process_payment(PaymentReceivedEvent.model_validate(data), raw)
-                else:
-                    logger.critical("dropping billing message with unknown type %r", event_type)
-            except (ValidationError, json.JSONDecodeError) as exc:
-                logger.critical("dropping poison billing message: %s", exc)
+        await dispatch(message, handle)
 
     return handler

@@ -19,6 +19,7 @@ from app.capture.models import CapturedEvent, RiskFlag
 from app.capture.repository import CaptureRepository
 from app.clock import now_iso
 from app.config import Settings
+from app.consumer.dispatch import PoisonMessage, dispatch
 from app.consumer.messages import ReadingRecordedEvent
 from app.publisher.reading_flagged import ReadingFlaggedPublisher, build_reading_flagged
 from app.redis_state.subscriber_state import get_state, roll, save_state
@@ -109,14 +110,14 @@ class ReadingPipeline:
 
 
 def make_reading_handler(pipeline: ReadingPipeline):
+    async def handle(raw: str) -> None:
+        try:
+            event = ReadingRecordedEvent.model_validate_json(raw)
+        except ValidationError as exc:
+            raise PoisonMessage(f"invalid reading.recorded message: {exc}") from exc
+        await pipeline.process(event, raw)
+
     async def handler(message: aio_pika.abc.AbstractIncomingMessage) -> None:
-        async with message.process(requeue=False):
-            raw = message.body.decode("utf-8")
-            try:
-                event = ReadingRecordedEvent.model_validate_json(raw)
-            except ValidationError as exc:
-                logger.critical("dropping poison reading.recorded message: %s", exc)
-                return
-            await pipeline.process(event, raw)
+        await dispatch(message, handle)
 
     return handler

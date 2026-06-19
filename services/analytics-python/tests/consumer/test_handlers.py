@@ -1,35 +1,39 @@
-"""Message-handler wrappers: routing, poison-message handling, and ack semantics."""
+"""Message-handler wrappers: routing, poison dead-lettering, retry, and ack semantics."""
 
 from __future__ import annotations
 
 import uuid
-from contextlib import asynccontextmanager
+
+import pytest
 
 from app.consumer.billing_consumer import BillingPipeline, make_billing_handler
 from app.consumer.reading_consumer import make_reading_handler
 
 
 class FakeMessage:
-    """Minimal stand-in for an aio_pika IncomingMessage."""
+    """Minimal stand-in for an aio_pika IncomingMessage recording ack/reject calls."""
 
-    def __init__(self, body: str) -> None:
+    def __init__(self, body: str, redelivered: bool = False) -> None:
         self.body = body.encode("utf-8")
-        self.processed = False
+        self.redelivered = redelivered
+        self.acked = False
+        self.rejected_requeue: bool | None = None
 
-    def process(self, requeue: bool = True):
-        @asynccontextmanager
-        async def _ctx():
-            self.processed = True
-            yield
+    async def ack(self) -> None:
+        self.acked = True
 
-        return _ctx()
+    async def reject(self, requeue: bool = False) -> None:
+        self.rejected_requeue = requeue
 
 
 class RecordingReadingPipeline:
-    def __init__(self) -> None:
+    def __init__(self, error: Exception | None = None) -> None:
         self.calls: list[str] = []
+        self.error = error
 
     async def process(self, event, raw_json: str) -> None:
+        if self.error is not None:
+            raise self.error
         self.calls.append(str(event.event_id))
 
 
@@ -41,7 +45,7 @@ def _reading_json() -> str:
     ) % (uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
 
 
-async def test_reading_handler_routes_valid_message() -> None:
+async def test_reading_handler_acks_valid_message() -> None:
     pipeline = RecordingReadingPipeline()
     handler = make_reading_handler(pipeline)
     message = FakeMessage(_reading_json())
@@ -49,10 +53,11 @@ async def test_reading_handler_routes_valid_message() -> None:
     await handler(message)
 
     assert len(pipeline.calls) == 1
-    assert message.processed is True
+    assert message.acked is True
+    assert message.rejected_requeue is None
 
 
-async def test_reading_handler_drops_poison_without_raising() -> None:
+async def test_reading_handler_dead_letters_poison_without_requeue() -> None:
     pipeline = RecordingReadingPipeline()
     handler = make_reading_handler(pipeline)
     message = FakeMessage('{"eventType":"reading.recorded","bogus":true}')
@@ -60,6 +65,28 @@ async def test_reading_handler_drops_poison_without_raising() -> None:
     await handler(message)  # must not raise
 
     assert pipeline.calls == []
+    assert message.acked is False
+    assert message.rejected_requeue is False
+
+
+async def test_reading_handler_requeues_once_on_transient_failure() -> None:
+    pipeline = RecordingReadingPipeline(error=RuntimeError("redis down"))
+    handler = make_reading_handler(pipeline)
+    message = FakeMessage(_reading_json(), redelivered=False)
+
+    await handler(message)
+
+    assert message.rejected_requeue is True
+
+
+async def test_reading_handler_dead_letters_after_redelivery() -> None:
+    pipeline = RecordingReadingPipeline(error=RuntimeError("redis down"))
+    handler = make_reading_handler(pipeline)
+    message = FakeMessage(_reading_json(), redelivered=True)
+
+    await handler(message)
+
+    assert message.rejected_requeue is False
 
 
 class RecordingBillingPipeline(BillingPipeline):
@@ -74,21 +101,20 @@ class RecordingBillingPipeline(BillingPipeline):
         self.payments += 1
 
 
-async def test_billing_handler_unknown_type_is_dropped() -> None:
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"eventType":"outage.scheduled","operatorId":"x"}',  # unknown type
+        "not json",  # invalid json
+    ],
+)
+async def test_billing_handler_dead_letters_poison(body: str) -> None:
     pipeline = RecordingBillingPipeline()
     handler = make_billing_handler(pipeline)
-    message = FakeMessage('{"eventType":"outage.scheduled","operatorId":"x"}')
-
-    await handler(message)
-
-    assert pipeline.invoices == 0 and pipeline.payments == 0
-
-
-async def test_billing_handler_drops_invalid_json() -> None:
-    pipeline = RecordingBillingPipeline()
-    handler = make_billing_handler(pipeline)
-    message = FakeMessage("not json")
+    message = FakeMessage(body)
 
     await handler(message)  # must not raise
 
     assert pipeline.invoices == 0 and pipeline.payments == 0
+    assert message.rejected_requeue is False
+    assert message.acked is False

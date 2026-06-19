@@ -27,6 +27,10 @@ class Settings:
     exchange: str = "ishtirak.events"
     reading_queue: str = "analytics.reading-recorded"
     billing_queue: str = "analytics.billing"
+    # Dead-letter sink: poison messages and transient failures that survive one retry
+    # are routed here instead of being dropped or requeued forever.
+    dead_letter_exchange: str = "analytics.dlx"
+    dead_letter_queue: str = "analytics.dlq"
     drop_threshold_pct: float = 0.4
     trailing_window: int = 5
     tier_cache_ttl_secs: int = 3600
