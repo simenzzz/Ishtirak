@@ -4,6 +4,7 @@ import { pinoHttp } from "pino-http";
 
 import { authMiddleware } from "./auth/authMiddleware.js";
 import { type Config } from "./config.js";
+import { corsMiddleware } from "./cors.js";
 import { logger } from "./logger.js";
 import { registerAnalyticsRoutes } from "./proxy/analyticsRoutes.js";
 import { registerAuthRoutes } from "./proxy/authRoutes.js";
@@ -43,6 +44,10 @@ export function createApp(probeOrOptions: ReadinessProbe | AppOptions = alwaysRe
   app.use(pinoHttp({ logger }));
 
   if (options.config) {
+    // Credentialed CORS must run before the routers so cookie-bearing browser
+    // requests (and their OPTIONS preflight) are answered correctly.
+    app.use(corsMiddleware(options.config));
+
     const publicApi = Router();
     registerAuthRoutes(publicApi, options.config, options.redis);
     app.use("/api", publicApi);

@@ -18,6 +18,17 @@ const envSchema = z.object({
     .string()
     .min(32, "GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET must be at least 32 characters"),
   SERVICE_TOKEN_TTL_SECS: z.coerce.number().int().positive().default(300),
+  // Browser origin allowed to make credentialed (cookie-bearing) requests.
+  WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
+  // Emit the refresh cookie with the Secure attribute. Defaults to true; set
+  // "false" only for a plain-HTTP local setup that is not localhost.
+  // (z.coerce.boolean treats any non-empty string as true, so parse explicitly.)
+  COOKIE_SECURE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  // Refresh-cookie lifetime; mirrors core-java's 30-day refresh token TTL.
+  REFRESH_COOKIE_MAX_AGE_SECS: z.coerce.number().int().positive().default(2592000),
 });
 
 export type Config = Readonly<z.infer<typeof envSchema>>;

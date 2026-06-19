@@ -14,6 +14,13 @@ export type ForwardOptions = Readonly<{
   querySchema?: z.ZodTypeAny;
   paramSchema?: z.ZodTypeAny;
   publicRoute?: boolean;
+  /** Override the body sent upstream (e.g. inject a cookie-sourced value). */
+  requestBody?: (req: Request) => unknown;
+  /**
+   * Inspect/transform the upstream response before it is sent to the client.
+   * May set cookies on `res`. Returns the (possibly new) body to emit.
+   */
+  onResponse?: (req: Request, res: Response, status: number, body: unknown) => unknown;
 }>;
 
 export function forward(options: ForwardOptions) {
@@ -39,8 +46,11 @@ export function forward(options: ForwardOptions) {
 
     const headers = new Headers();
     headers.set("accept", "application/json");
+    const sendsBody = req.method !== "GET" && req.method !== "HEAD";
     const contentType = req.header("content-type");
-    if (contentType && req.method !== "GET" && req.method !== "HEAD") {
+    if (options.requestBody && sendsBody) {
+      headers.set("content-type", "application/json");
+    } else if (contentType && sendsBody) {
       headers.set("content-type", contentType);
     }
     const idempotencyKey = req.header("idempotency-key");
@@ -58,13 +68,14 @@ export function forward(options: ForwardOptions) {
     }
 
     try {
-      const body = bodyResult.value ?? req.body ?? {};
+      const body = options.requestBody ? options.requestBody(req) : (bodyResult.value ?? req.body ?? {});
       const upstream = await fetch(url, {
         method: req.method,
         headers,
-        body: req.method === "GET" || req.method === "HEAD" ? undefined : JSON.stringify(body),
+        body: sendsBody ? JSON.stringify(body) : undefined,
       });
-      const content = await readUpstream(upstream);
+      const raw = await readUpstream(upstream);
+      const content = options.onResponse ? options.onResponse(req, res, upstream.status, raw) : raw;
       res.status(upstream.status);
       if (content === undefined) {
         res.end();

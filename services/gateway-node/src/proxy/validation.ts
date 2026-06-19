@@ -18,8 +18,6 @@ export const selectContextBodySchema = z.object({
   membershipId: z.string().uuid(),
 });
 
-export const refreshBodySchema = z.object({ refreshToken: z.string().min(1) });
-
 export const createSubscriberBodySchema = z.object({
   name: z.string().min(1),
   tierId: z.string().uuid(),

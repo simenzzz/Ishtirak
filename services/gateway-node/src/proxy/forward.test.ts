@@ -52,6 +52,46 @@ describe("forward", () => {
     expect(res.body).toEqual({ ok: true });
   });
 
+  it("uses requestBody to override the upstream payload and forces json content-type", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ accessToken: "new" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = response();
+
+    await forward({
+      config,
+      target: "core-java",
+      baseUrl: config.CORE_JAVA_URL,
+      path: () => "/auth/refresh",
+      publicRoute: true,
+      requestBody: () => ({ refreshToken: "from-cookie" }),
+    })({ method: "POST", query: {}, params: {}, body: {}, header: () => undefined } as any, res as any);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers.get("content-type")).toBe("application/json");
+    expect(init.body).toBe(JSON.stringify({ refreshToken: "from-cookie" }));
+  });
+
+  it("lets onResponse transform the body and set cookies", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ accessToken: "at", refreshToken: "rt" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = response();
+    const onResponse = vi.fn((_req, _res, _status, body: any) => ({ accessToken: body.accessToken }));
+
+    await forward({
+      config,
+      target: "core-java",
+      baseUrl: config.CORE_JAVA_URL,
+      path: () => "/auth/login",
+      publicRoute: true,
+      onResponse,
+    })({ method: "POST", query: {}, params: {}, body: { email: "a" }, header: () => "application/json" } as any, res as any);
+
+    expect(onResponse).toHaveBeenCalledWith(expect.anything(), res, 200, { accessToken: "at", refreshToken: "rt" });
+    expect(res.body).toEqual({ accessToken: "at" });
+  });
+
   it("returns validation errors before calling upstream", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

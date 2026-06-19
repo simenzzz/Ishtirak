@@ -65,7 +65,15 @@ paths:
                   description: Never logged or echoed back.
       responses:
         '200':
-          description: Authenticated or context selection required.
+          description: >
+            Authenticated or context selection required. On a direct (single
+            membership) login the rotating refresh token is returned as an
+            HttpOnly `Set-Cookie` (`ishtirak.refresh`), never in the body; the
+            short-lived access token is in the body for in-memory use.
+          headers:
+            Set-Cookie:
+              description: HttpOnly refresh-token cookie set on direct login.
+              schema: { type: string }
           content:
             application/json:
               schema:
@@ -76,7 +84,6 @@ paths:
                   contextSelectionRequired: { type: boolean }
                   selectionToken: { type: string }
                   accessToken: { type: string }
-                  refreshToken: { type: string }
                   memberships:
                     type: array
                     items:
@@ -113,16 +120,21 @@ paths:
                 membershipId: { type: string, format: uuid }
       responses:
         '200':
-          description: Context-bound tokens.
+          description: >
+            Context-bound access token in the body; the rotating refresh token is
+            set as an HttpOnly `Set-Cookie` (`ishtirak.refresh`).
+          headers:
+            Set-Cookie:
+              description: HttpOnly refresh-token cookie.
+              schema: { type: string }
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [accessToken, refreshToken]
+                required: [accessToken]
                 properties:
                   accessToken: { type: string }
-                  refreshToken: { type: string }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
         '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
 
@@ -132,24 +144,20 @@ paths:
       operationId: refreshToken
       summary: Refresh an access token
       description: >
-        Refresh tokens are single-use and rotated on each refresh; detecting reuse
-        of a consumed token revokes the token family (theft mitigation).
-        Rate-limited.
+        Authenticated solely by the HttpOnly `ishtirak.refresh` cookie — there is
+        no request body. The gateway reads the cookie, forwards it to core-java,
+        and sets the rotated refresh token as a new HttpOnly cookie. Refresh
+        tokens are single-use and rotated on each refresh; detecting reuse of a
+        consumed token revokes the token family (theft mitigation). Rate-limited.
       x-status: built
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [refreshToken]
-              properties:
-                refreshToken: { type: string }
       responses:
         '200':
-          description: New access token (and rotated refresh token).
+          description: New access token in the body; rotated refresh token in the cookie.
+          headers:
+            Set-Cookie:
+              description: Rotated HttpOnly refresh-token cookie.
+              schema: { type: string }
           content:
             application/json:
               schema:
@@ -158,8 +166,27 @@ paths:
                 required: [accessToken]
                 properties:
                   accessToken: { type: string }
-                  refreshToken: { type: string }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: 'components.yaml#/components/responses/TooManyRequests' }
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Clear the refresh-token cookie
+      description: >
+        Clears the HttpOnly `ishtirak.refresh` cookie in the browser. Idempotent;
+        succeeds whether or not a session was active. Server-side refresh-token
+        revocation is deferred (no core-java endpoint yet). Rate-limited.
+      x-status: built
+      security: []
+      responses:
+        '204':
+          description: Cookie cleared.
+          headers:
+            Set-Cookie:
+              description: Expired refresh-token cookie.
+              schema: { type: string }
         '429': { $ref: 'components.yaml#/components/responses/TooManyRequests' }
 
   /api/me:
