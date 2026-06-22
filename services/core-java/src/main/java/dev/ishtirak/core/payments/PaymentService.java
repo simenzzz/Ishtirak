@@ -57,6 +57,9 @@ public class PaymentService {
         InvoiceEntity invoiceEntity = invoices.lockByOperatorIdAndId(operatorId, invoiceId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Invoice not found"));
         Invoice invoice = invoiceEntity.toDomain();
+        if (invoice.status() == InvoiceStatus.NEEDS_REVIEW || invoice.status() == InvoiceStatus.VOID) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Invoice is not payable in its current state");
+        }
         AppliedPayment outstanding = outstanding(invoice);
         if (outstanding.usd().signum() == 0 && outstanding.lbp() == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Payment exceeds invoice outstanding balance");

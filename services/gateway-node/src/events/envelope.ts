@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { invoiceReady, outageCountdown, tamperingAlert } from "../ws/messages.js";
+import { invoiceReady, invoiceUpdated, outageCountdown, tamperingAlert } from "../ws/messages.js";
 import { type FanoutEnvelope } from "../ws/fanout.js";
 
 const baseEnvelope = z.object({
@@ -32,6 +32,17 @@ export const invoiceIssuedEventSchema = baseEnvelope.extend({
   }),
 });
 
+export const invoiceStatusChangedEventSchema = baseEnvelope.extend({
+  eventType: z.literal("invoice.status.changed"),
+  payload: z.object({
+    invoiceId: z.string().uuid(),
+    subscriberId: z.string().uuid(),
+    periodStart: z.string(),
+    periodEnd: z.string(),
+    status: z.enum(["NEEDS_REVIEW", "VOID"]),
+  }),
+});
+
 export const readingFlaggedEventSchema = baseEnvelope.extend({
   eventType: z.literal("reading.flagged"),
   payload: z.object({
@@ -45,6 +56,7 @@ export const readingFlaggedEventSchema = baseEnvelope.extend({
 export const gatewayEventSchema = z.discriminatedUnion("eventType", [
   outageScheduledEventSchema,
   invoiceIssuedEventSchema,
+  invoiceStatusChangedEventSchema,
   readingFlaggedEventSchema,
 ]);
 
@@ -71,6 +83,13 @@ export function mapEventToFanout(event: GatewayEvent): FanoutEnvelope {
       operatorId: event.operatorId,
       audience: { kind: "subscriber", channel: "invoices", subscriberId: event.payload.subscriberId },
       message: invoiceReady(event.payload),
+    };
+  }
+  if (event.eventType === "invoice.status.changed") {
+    return {
+      operatorId: event.operatorId,
+      audience: { kind: "subscriber", channel: "invoices", subscriberId: event.payload.subscriberId },
+      message: invoiceUpdated(event.payload),
     };
   }
   return {

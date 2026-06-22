@@ -19,8 +19,10 @@ test("an anomalous reading raises a live tampering alert on the dashboard", asyn
   await watcher.goto("/operator/analytics");
   await expect(watcher.getByText(/live alerts connected/i)).toBeVisible();
 
-  // Staff records a high baseline then a sharply lower value (negative delta).
-  await login(recorder, USERS.staff, /\/operator/);
+  // Admin records a high baseline then a sharply lower value (negative delta). The
+  // rollback (50 < 500) is a corrective reading, which core-java permits only for
+  // admins — see ReadingService.record's backdated/rollback guard.
+  await login(recorder, USERS.admin, /\/operator/);
   await recordReading(recorder, SEEDED_SUBSCRIBER_ID, 500);
   await recordReading(recorder, SEEDED_SUBSCRIBER_ID, 50);
 

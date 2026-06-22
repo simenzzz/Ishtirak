@@ -34,6 +34,11 @@ class Settings:
     drop_threshold_pct: float = 0.4
     trailing_window: int = 5
     tier_cache_ttl_secs: int = 3600
+    # Initial RabbitMQ connect is retried this many times (with the delay below) to
+    # ride out the gap between the broker reporting healthy and its AMQP listener
+    # accepting connections. Defaults give ~30s of headroom.
+    rabbitmq_connect_max_attempts: int = 30
+    rabbitmq_connect_retry_delay_secs: int = 1
 
     @property
     def reading_routing_keys(self) -> tuple[str, ...]:
@@ -62,6 +67,8 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         drop_threshold_pct=_float(source, "ANALYTICS_DROP_THRESHOLD_PCT", 0.4),
         trailing_window=_int(source, "ANALYTICS_TRAILING_WINDOW", 5),
         tier_cache_ttl_secs=_int(source, "ANALYTICS_TIER_CACHE_TTL_SECS", 3600),
+        rabbitmq_connect_max_attempts=_int(source, "ISHTIRAK_RABBITMQ_CONNECT_MAX_ATTEMPTS", 30),
+        rabbitmq_connect_retry_delay_secs=_int(source, "ISHTIRAK_RABBITMQ_CONNECT_RETRY_DELAY_SECS", 1),
     )
 
 

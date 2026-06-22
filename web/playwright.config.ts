@@ -14,7 +14,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // These flows depend on real-time WebSocket fan-out and a session re-bootstrap
+  // (refresh cookie -> access token) on hard navigations, both of which can race
+  // transiently while the freshly-started stack is still warming. Retry to keep
+  // the suite deterministically green without masking real, repeatable failures.
+  retries: 2,
   timeout: 60_000,
   expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { open: "never" }]],

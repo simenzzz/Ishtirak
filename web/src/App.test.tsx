@@ -127,6 +127,45 @@ describe("dashboard and portal components", () => {
     await screen.findByText(/1,800,000 LBP/);
   });
 
+  it("refreshes current bill when invoice.updated arrives", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json({ data: [{ id: "i1", subscriberId: "s", periodStart: "2026-06-01", periodEnd: "2026-06-30", amountUsd: 10, amountLbp: 900000, kwhConsumed: 12, status: "ISSUED" }], meta: { total: 1, page: 1, limit: 5 } }))
+      .mockResolvedValueOnce(json({ data: [
+        { id: "i2", subscriberId: "s", periodStart: "2026-07-01", periodEnd: "2026-07-31", amountUsd: 0, amountLbp: 0, kwhConsumed: 0, status: "VOID" },
+        { id: "i1", subscriberId: "s", periodStart: "2026-06-01", periodEnd: "2026-06-30", amountUsd: 10, amountLbp: 900000, kwhConsumed: 12, status: "ISSUED" },
+      ], meta: { total: 2, page: 1, limit: 5 } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CurrentBillPage />);
+    await screen.findByText(/900,000 LBP/);
+    act(() => window.dispatchEvent(new CustomEvent("ishtirak:ws", { detail: { type: "invoice.updated", data: { invoiceId: "i2", status: "VOID" } } })));
+    await screen.findByText("Voided");
+    expect(screen.getByTestId("current-bill")).toHaveTextContent("31 Jul 2026");
+  });
+
+  it.each([
+    ["NEEDS_REVIEW", "Under review"],
+    ["VOID", "Voided"],
+  ])("renders %s current bill as a status", async (status, label) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({
+      data: [{
+        id: "i1",
+        subscriberId: "s",
+        periodStart: "2026-06-01",
+        periodEnd: "2026-06-30",
+        amountUsd: 0,
+        amountLbp: 0,
+        kwhConsumed: 0,
+        status,
+      }],
+      meta: { total: 1, page: 1, limit: 5 },
+    })));
+
+    render(<CurrentBillPage />);
+
+    await screen.findByText(label);
+    expect(screen.queryByText(/\$0.00/)).not.toBeInTheDocument();
+  });
+
   it("renders an outage countdown snapshot", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json([{ id: "o", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 5000).toISOString(), reason: "FUEL" }])));
     render(<OutageCountdown />);

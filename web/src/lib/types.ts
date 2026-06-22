@@ -54,7 +54,7 @@ export type Subscriber = Readonly<{
 }>;
 
 export type Reading = Readonly<{ id: string; subscriberId: string; kwh: number; readingAt: string }>;
-export type InvoiceStatus = "ISSUED" | "PARTIAL" | "PAID" | "VOID";
+export type InvoiceStatus = "ISSUED" | "PARTIAL" | "PAID" | "VOID" | "NEEDS_REVIEW";
 export type Invoice = Readonly<{
   id: string;
   subscriberId: string;
@@ -110,6 +110,7 @@ export type WsChannel = "alerts" | "outages" | "invoices";
 export type WsEvent =
   | Readonly<{ type: "outage.countdown"; data: { outageId: string; startsAt: string; endsAt: string; secondsRemaining: number } }>
   | Readonly<{ type: "invoice.ready"; data: { invoiceId: string; amountUsd: number; amountLbp: number; periodEnd: string } }>
+  | Readonly<{ type: "invoice.updated"; data: { invoiceId: string; periodEnd: string; status: "NEEDS_REVIEW" | "VOID" } }>
   | Readonly<{ type: "tampering.alert"; data: { subscriberId: string; readingId: string; reason: string; score: number } }>
   | Readonly<{ type: "pong"; data?: unknown }>
   | Readonly<{ type: "unauthorized"; data: { channel: WsChannel; reason: string } }>;

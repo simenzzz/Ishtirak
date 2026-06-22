@@ -122,6 +122,20 @@ class PaymentServiceTest {
     }
 
     @Test
+    void rejectsPaymentForInvoiceThatIsNotPayable() {
+        Invoice invoice = saveInvoice(new BigDecimal("0.00"), 0L, InvoiceStatus.NEEDS_REVIEW);
+
+        assertThatThrownBy(() -> service.record(
+                        invoice.operatorId(),
+                        invoice.id(),
+                        CurrencyCode.USD,
+                        new BigDecimal("1.00"),
+                        PaymentMethod.CASH))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("not payable");
+    }
+
+    @Test
     void concurrentPaymentsCannotOverpayInvoice() throws Exception {
         Invoice invoice = saveInvoice(new BigDecimal("10.00"), 900000L);
         CountDownLatch start = new CountDownLatch(1);
@@ -138,6 +152,10 @@ class PaymentServiceTest {
     }
 
     private Invoice saveInvoice(BigDecimal usd, long lbp) {
+        return saveInvoice(usd, lbp, InvoiceStatus.ISSUED);
+    }
+
+    private Invoice saveInvoice(BigDecimal usd, long lbp, InvoiceStatus status) {
         UUID tierId = testData.seedTier().id();
         UUID subscriberId = testData.seedSubscriber(tierId).id();
         Invoice invoice = new Invoice(
@@ -149,7 +167,7 @@ class PaymentServiceTest {
                 usd,
                 lbp,
                 new BigDecimal("20"),
-                InvoiceStatus.ISSUED,
+                status,
                 Instant.parse("2026-02-01T00:00:00Z"));
         return invoices.save(new InvoiceEntity(invoice)).toDomain();
     }

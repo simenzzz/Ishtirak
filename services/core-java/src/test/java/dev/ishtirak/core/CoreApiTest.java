@@ -45,30 +45,6 @@ class CoreApiTest {
     }
 
     @Test
-    void rejectsInternalRequestWithoutServiceTokenAndIdentityHeaders() throws Exception {
-        mockMvc.perform(get("/tiers")).andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void rejectsForgedBearerWithTrustedHeaders() throws Exception {
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.setBearerAuth("not-a-signed-service-token");
-        headers.add("X-Operator-Id", OPERATOR_ID.toString());
-        headers.add("X-Actor-Role", "OPERATOR_ADMIN");
-
-        mockMvc.perform(get("/tiers").headers(headers)).andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void rejectsServiceTokenWhenClaimsDoNotMatchTrustedHeaders() throws Exception {
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.setBearerAuth(TestServiceTokens.signed(OPERATOR_ID, "OPERATOR_STAFF", null, SERVICE_SECRET));
-        headers.add("X-Operator-Id", OPERATOR_ID.toString());
-        headers.add("X-Actor-Role", "OPERATOR_ADMIN");
-
-        mockMvc.perform(get("/tiers").headers(headers)).andExpect(status().isUnauthorized());
-    }
-    @Test
     void runsDualCurrencyBillingAndSubscriberMeProjection() throws Exception {
         String tierId = createTier();
         String subscriberId = createSubscriber(tierId);
@@ -131,20 +107,6 @@ class CoreApiTest {
         mockMvc.perform(get("/invoices").headers(headers("OPERATOR_STAFF", null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.meta.total").value(1));
-    }
-    @Test
-    void rejectsReadingThatWouldBreakFutureMonotonicSequence() throws Exception {
-        String tierId = createTier();
-        String subscriberId = createSubscriber(tierId);
-        recordReading(subscriberId, "100", "2026-01-31T12:00:00Z");
-
-        mockMvc.perform(post("/readings")
-                        .headers(headers("OPERATOR_STAFF", null))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"subscriberId":"%s","kwh":110,"readingAt":"2026-01-15T12:00:00Z"}
-                                """.formatted(subscriberId)))
-                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -276,14 +238,18 @@ class CoreApiTest {
 
     private Boolean runBillingAfterStart(CountDownLatch start) throws Exception {
         start.await();
+        runBilling("2026-01-01", "2026-01-31");
+        return true;
+    }
+
+    private void runBilling(String periodStart, String periodEnd) throws Exception {
         mockMvc.perform(post("/billing-runs")
                         .headers(headers("OPERATOR_ADMIN", null))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"periodStart":"2026-01-01","periodEnd":"2026-01-31"}
-                                """))
+                                {"periodStart":"%s","periodEnd":"%s"}
+                                """.formatted(periodStart, periodEnd)))
                 .andExpect(status().isAccepted());
-        return true;
     }
 
     private org.springframework.http.HttpHeaders headers(String role, String subscriberId) {

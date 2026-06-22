@@ -14,6 +14,7 @@ public class EventContractValidator {
     private static final Map<String, String> SCHEMAS = Map.of(
             "reading.recorded", "contracts/events/reading-recorded.schema.json",
             "invoice.issued", "contracts/events/invoice-issued.schema.json",
+            "invoice.status.changed", "contracts/events/invoice-status-changed.schema.json",
             "payment.received", "contracts/events/payment-received.schema.json",
             "outage.scheduled", "contracts/events/outage-scheduled.schema.json");
 

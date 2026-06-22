@@ -33,13 +33,18 @@ services:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # `ping` only proves the Erlang node is alive — it goes green seconds before
+      # the AMQP listener on 5672 actually accepts connections, which lets fast
+      # dependents (gateway-node, analytics-python) start, hit a closed port, and
+      # crash. `check_port_connectivity` waits until the listeners are truly up.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 10
 
   core-java:
     build: ../services/core-java
+    restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ishtirak
       SPRING_DATASOURCE_USERNAME: ishtirak
@@ -60,6 +65,7 @@ services:
 
   analytics-python:
     build: ../services/analytics-python
+    restart: unless-stopped
     environment:
       ISHTIRAK_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       ISHTIRAK_REDIS_URL: redis://redis:6379/0
@@ -67,8 +73,12 @@ services:
       ISHTIRAK_CAPTURE_DB_PATH: /data/capture.db
       ISHTIRAK_ANALYTICS_SERVICE_TOKEN_SECRET: ${ANALYTICS_SERVICE_TOKEN_SECRET}
       ISHTIRAK_GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET: ${GATEWAY_ANALYTICS_SERVICE_TOKEN_SECRET}
+      # The analytics image doesn't bundle the shared event schemas (its build context
+      # is the service dir), so mount them and point the validator loader at the mount.
+      ISHTIRAK_CONTRACTS_DIR: /app/contracts
     volumes:
       - analytics-data:/data
+      - ../contracts:/app/contracts:ro
     ports:
       - "127.0.0.1:8082:8082"
     depends_on:
@@ -81,6 +91,7 @@ services:
 
   gateway-node:
     build: ../services/gateway-node
+    restart: unless-stopped
     environment:
       CORE_JAVA_URL: http://core-java:8081
       ANALYTICS_URL: http://analytics-python:8082
@@ -93,14 +104,22 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       REFRESH_COOKIE_MAX_AGE_SECS: ${REFRESH_COOKIE_MAX_AGE_SECS:-2592000}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
     ports:
       - "8080:8080"
     depends_on:
-      - core-java
-      - analytics-python
+      core-java:
+        condition: service_started
+      analytics-python:
+        condition: service_started
+      # The gateway opens its own AMQP connection, so gate it on the broker being
+      # ready — not just on the services it proxies.
+      rabbitmq:
+        condition: service_healthy
 
   web:
     build: ../web
+    restart: unless-stopped
     environment:
       VITE_API_URL: http://localhost:8080
     ports:

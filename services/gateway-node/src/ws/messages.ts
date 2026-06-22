@@ -56,6 +56,14 @@ export function invoiceReady(data: {
   return withTs("invoice.ready", data);
 }
 
+export function invoiceUpdated(data: {
+  invoiceId: string;
+  periodEnd: string;
+  status: "NEEDS_REVIEW" | "VOID";
+}): WsMessage {
+  return withTs("invoice.updated", data);
+}
+
 export function tamperingAlert(data: {
   subscriberId: string;
   readingId: string;

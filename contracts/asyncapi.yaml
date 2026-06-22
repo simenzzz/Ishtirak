@@ -50,6 +50,12 @@ channels:
     messages:
       invoiceIssued: { $ref: '#/components/messages/InvoiceIssued' }
     bindings: { $ref: '#/components/channelBindings/topicEvent' }
+  invoiceStatusChanged:
+    address: invoice.status.changed
+    description: An invoice moved to a non-payable state such as NEEDS_REVIEW or VOID.
+    messages:
+      invoiceStatusChanged: { $ref: '#/components/messages/InvoiceStatusChanged' }
+    bindings: { $ref: '#/components/channelBindings/topicEvent' }
   paymentReceived:
     address: payment.received
     description: A payment was recorded against an invoice.
@@ -82,6 +88,7 @@ channels:
     messages:
       outageCountdown: { $ref: '#/components/messages/OutageCountdown' }
       invoiceReady: { $ref: '#/components/messages/InvoiceReady' }
+      invoiceUpdated: { $ref: '#/components/messages/InvoiceUpdated' }
       tamperingAlert: { $ref: '#/components/messages/TamperingAlert' }
       unauthorized: { $ref: '#/components/messages/Unauthorized' }
       pong: { $ref: '#/components/messages/Pong' }
@@ -147,6 +154,12 @@ operations:
     x-consumed-by: gateway-node
     channel: { $ref: '#/channels/invoiceIssued' }
     summary: gateway-node pushes a "bill ready" message to the subscriber.
+  gatewayReceiveInvoiceStatusChanged:
+    action: receive
+    x-status: built
+    x-consumed-by: gateway-node
+    channel: { $ref: '#/channels/invoiceStatusChanged' }
+    summary: gateway-node pushes an `invoice.updated` invalidation to the subscriber.
   gatewayReceiveOutageScheduled:
     action: receive
     x-status: built
@@ -185,6 +198,14 @@ operations:
     messages:
       - { $ref: '#/channels/wsServerToClient/messages/invoiceReady' }
     summary: Bill-ready push to a subscriber.
+  gatewaySendInvoiceUpdated:
+    action: send
+    x-status: built
+    x-emitted-by: gateway-node
+    channel: { $ref: '#/channels/wsServerToClient' }
+    messages:
+      - { $ref: '#/channels/wsServerToClient/messages/invoiceUpdated' }
+    summary: Invoice status invalidation push to a subscriber.
   gatewaySendTamperingAlert:
     action: send
     x-status: built
@@ -237,6 +258,13 @@ components:
       summary: Emitted when the billing run produces an invoice.
       payload:
         $ref: './events/invoice-issued.schema.json'
+    InvoiceStatusChanged:
+      name: InvoiceStatusChanged
+      title: invoice.status.changed
+      contentType: application/json
+      summary: Emitted when an invoice moves to a non-payable state.
+      payload:
+        $ref: './events/invoice-status-changed.schema.json'
     PaymentReceived:
       name: PaymentReceived
       title: payment.received
@@ -296,6 +324,23 @@ components:
               amountUsd: { type: number, minimum: 0 }
               amountLbp: { type: integer, minimum: 0 }
               periodEnd: { type: string, format: date }
+    InvoiceUpdated:
+      name: InvoiceUpdated
+      title: invoice.updated
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, data, ts]
+        properties:
+          type: { type: string, const: invoice.updated }
+          ts: { type: string, format: date-time }
+          data:
+            type: object
+            required: [invoiceId, periodEnd, status]
+            properties:
+              invoiceId: { type: string, format: uuid }
+              periodEnd: { type: string, format: date }
+              status: { type: string, enum: [NEEDS_REVIEW, VOID] }
     TamperingAlert:
       name: TamperingAlert
       title: tampering.alert

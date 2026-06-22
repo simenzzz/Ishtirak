@@ -453,7 +453,10 @@ paths:
       tags: [readings]
       operationId: apiRecordReading
       summary: Record a meter reading
-      description: Proxies to core-java, which emits `reading.recorded`.
+      description: >
+        Proxies to core-java, which emits `reading.recorded`. Staff can record
+        normal forward readings; backdated or rollback corrective readings
+        require an admin identity.
       x-status: built
       x-required-roles: [OPERATOR_ADMIN, OPERATOR_STAFF]
       requestBody:
@@ -509,9 +512,11 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [issued, periodStart, periodEnd]
+                required: [issued, issuedCount, needsReviewCount, periodStart, periodEnd]
                 properties:
-                  issued: { type: integer, minimum: 0 }
+                  issued: { type: integer, minimum: 0, description: Legacy alias for issuedCount. }
+                  issuedCount: { type: integer, minimum: 0 }
+                  needsReviewCount: { type: integer, minimum: 0 }
                   periodStart: { type: string, format: date }
                   periodEnd: { type: string, format: date }
         '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
@@ -526,7 +531,7 @@ paths:
       summary: List invoices
       x-status: built
       parameters:
-        - { name: status, in: query, required: false, schema: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID] } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID, NEEDS_REVIEW] } }
         - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
         - { name: periodEnd, in: query, required: false, schema: { type: string, format: date } }
         - $ref: 'components.yaml#/components/parameters/pageParam'
@@ -566,6 +571,48 @@ paths:
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
         '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
         '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
+  /api/invoices/{id}/reissue:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    post:
+      tags: [billing]
+      operationId: apiReissueInvoice
+      summary: Re-issue a held invoice after corrective readings
+      x-status: built
+      x-required-roles: [OPERATOR_ADMIN]
+      responses:
+        '200':
+          description: Re-issued invoice.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Invoice' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+        '409': { $ref: 'components.yaml#/components/responses/Conflict' }
+
+  /api/invoices/{id}/void:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/idParam'
+    post:
+      tags: [billing]
+      operationId: apiVoidInvoice
+      summary: Void a held or unpaid issued invoice
+      x-status: built
+      x-required-roles: [OPERATOR_ADMIN]
+      responses:
+        '200':
+          description: Voided invoice.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/Invoice' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+        '409': { $ref: 'components.yaml#/components/responses/Conflict' }
 
   /api/invoices/{id}/payments:
     parameters:

@@ -6,7 +6,7 @@ import { useFetch } from "../hooks/useFetch";
 import { usePaginated } from "../hooks/usePaginated";
 import { apiRequest } from "../lib/apiClient";
 import { formatDate, formatDual } from "../lib/format";
-import type { Currency, Invoice, Payment } from "../lib/types";
+import type { Currency, Invoice, InvoiceStatus, Payment } from "../lib/types";
 
 export function InvoicesPage() {
   const invoices = usePaginated<Invoice>("/invoices");
@@ -36,14 +36,20 @@ export function InvoiceDetailPage() {
   const { id } = useParams();
   const invoice = useFetch<Invoice>(id ? `/invoices/${id}` : null);
   const payments = useFetch<readonly Payment[]>(id ? `/invoices/${id}/payments` : null);
+  const status = invoice.data?.status;
+  const refresh = async () => { await payments.refetch(); await invoice.refetch(); };
+  const payable = status === "ISSUED" || status === "PARTIAL";
+  const canVoidIssued = status === "ISSUED" && !payments.loading && (payments.data ?? []).length === 0;
+  const resolvable = status === "NEEDS_REVIEW" || canVoidIssued;
   return (
     <section className="page-stack">
       <DataState loading={invoice.loading} error={invoice.error}>
         <header className="page-header">
           <div><p className="eyebrow">Invoice</p><h2>{invoice.data ? formatDual(invoice.data.amountUsd, invoice.data.amountLbp) : ""}</h2></div>
-          <span className="badge">{invoice.data?.status}</span>
+          <span className="badge">{status}</span>
         </header>
-        {id ? <RecordPaymentForm invoiceId={id} onDone={async () => { await payments.refetch(); await invoice.refetch(); }} /> : null}
+        {id && payable ? <RecordPaymentForm invoiceId={id} onDone={refresh} /> : null}
+        {id && resolvable ? <ResolutionActions invoiceId={id} status={status as InvoiceStatus} onDone={refresh} /> : null}
       </DataState>
       <DataState loading={payments.loading} error={payments.error}>
         <table><tbody>{(payments.data ?? []).map((payment) => (
@@ -51,6 +57,36 @@ export function InvoiceDetailPage() {
         ))}</tbody></table>
       </DataState>
     </section>
+  );
+}
+
+/** Operator resolution for held/issued invoices: re-issue after a corrective reading, or void. */
+function ResolutionActions({ invoiceId, status, onDone }: {
+  readonly invoiceId: string;
+  readonly status: InvoiceStatus;
+  readonly onDone: () => Promise<void>;
+}) {
+  const [error, setError] = useState("");
+  async function act(action: "reissue" | "void") {
+    setError("");
+    try {
+      await apiRequest<Invoice>(`/invoices/${invoiceId}/${action}`, { method: "POST" });
+      await onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update invoice.");
+    }
+  }
+  return (
+    <div className="inline-form">
+      {status === "NEEDS_REVIEW" ? (
+        <>
+          <p className="status-line">Under review — record a corrective reading on the Readings page, then re-issue.</p>
+          <button type="button" onClick={() => act("reissue")}>Re-issue</button>
+        </>
+      ) : null}
+      <button type="button" onClick={() => act("void")}>Void invoice</button>
+      {error ? <p className="error">{error}</p> : null}
+    </div>
   );
 }
 

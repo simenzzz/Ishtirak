@@ -188,7 +188,7 @@ components:
         amountUsd: { type: number, minimum: 0 }
         amountLbp: { type: integer, minimum: 0 }
         kwhConsumed: { type: number, minimum: 0 }
-        status: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID] }
+        status: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID, NEEDS_REVIEW] }
         issuedAt: { type: string, format: date-time }
 
     Payment:

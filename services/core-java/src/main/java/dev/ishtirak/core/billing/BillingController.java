@@ -45,7 +45,21 @@ public class BillingController {
         identity.requireAdmin();
         List<Invoice> invoices = billingService.runBilling(
                 identity.operatorId(), request.periodStart(), request.periodEnd(), idempotencyKey);
-        return new BillingRunResponse(invoices.size(), request.periodStart(), request.periodEnd());
+        int issued = (int) invoices.stream().filter(invoice -> invoice.status() == InvoiceStatus.ISSUED).count();
+        int needsReview = (int) invoices.stream().filter(invoice -> invoice.status() == InvoiceStatus.NEEDS_REVIEW).count();
+        return new BillingRunResponse(issued, issued, needsReview, request.periodStart(), request.periodEnd());
+    }
+
+    @PostMapping("/invoices/{id}/reissue")
+    InvoiceResponse reissueInvoice(RequestIdentity identity, @PathVariable UUID id) {
+        identity.requireAdmin();
+        return InvoiceResponse.from(billingService.reissue(identity.operatorId(), id));
+    }
+
+    @PostMapping("/invoices/{id}/void")
+    InvoiceResponse voidInvoice(RequestIdentity identity, @PathVariable UUID id) {
+        identity.requireAdmin();
+        return InvoiceResponse.from(billingService.voidInvoice(identity.operatorId(), id));
     }
 
     @GetMapping("/invoices")
@@ -111,7 +125,12 @@ public class BillingController {
     public record BillingRunRequest(@NotNull LocalDate periodStart, @NotNull LocalDate periodEnd) {
     }
 
-    public record BillingRunResponse(int issued, LocalDate periodStart, LocalDate periodEnd) {
+    public record BillingRunResponse(
+            int issued,
+            int issuedCount,
+            int needsReviewCount,
+            LocalDate periodStart,
+            LocalDate periodEnd) {
     }
 
     public record RecordPaymentRequest(

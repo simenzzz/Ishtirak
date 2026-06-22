@@ -3,7 +3,7 @@ import { FormEvent, useState } from "react";
 import { useAuth } from "../auth/useAuth";
 import { apiRequest } from "../lib/apiClient";
 
-type BillingRunResult = Readonly<{ issuedCount?: number; invoiceCount?: number }>;
+type BillingRunResult = Readonly<{ issuedCount?: number; invoiceCount?: number; needsReviewCount?: number }>;
 
 export function BillingRunPage() {
   const { identity } = useAuth();
@@ -22,7 +22,11 @@ export function BillingRunPage() {
         headers: { "Idempotency-Key": crypto.randomUUID() },
         body: { periodStart, periodEnd },
       });
-      setResult(`${response.issuedCount ?? response.invoiceCount ?? 0} invoices issued`);
+      const issued = response.issuedCount ?? response.invoiceCount ?? 0;
+      const needsReview = response.needsReviewCount ?? 0;
+      setResult(needsReview > 0
+        ? `${issued} invoices issued, ${needsReview} need review`
+        : `${issued} invoices issued`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Billing run failed.");
     }

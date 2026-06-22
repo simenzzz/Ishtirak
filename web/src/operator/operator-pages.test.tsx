@@ -19,18 +19,26 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function installGatewayMock() {
+function installGatewayMock(options: {
+  readonly currentInvoice?: typeof invoice;
+  readonly payments?: readonly unknown[];
+  readonly billingResult?: unknown;
+} = {}) {
+  const currentInvoice = options.currentInvoice ?? invoice;
+  const currentPayments = options.payments ?? [{ id: "p1", invoiceId: invoice.id, subscriberId: subscriber.id, currency: "USD", tenderedAmount: 5, appliedUsd: 5, appliedLbp: 450000, method: "CASH" }];
+  const billingResult = options.billingResult ?? { issuedCount: 2 };
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/api/me")) return Promise.resolve(json({ operatorId: "op", role: "OPERATOR_ADMIN", name: "Admin" }));
-    if (init?.method === "POST" || init?.method === "PATCH") return Promise.resolve(json({ issuedCount: 2, ...subscriber, ...tier, ...invoice, ...outage }));
+    if (init?.method === "POST" && url.includes("/api/billing-runs")) return Promise.resolve(json(billingResult));
+    if (init?.method === "POST" || init?.method === "PATCH") return Promise.resolve(json({ ...subscriber, ...tier, ...currentInvoice, ...outage }));
     if (url.includes("/api/subscribers/") && url.includes("/readings")) return Promise.resolve(json(page([{ id: "r1", subscriberId: subscriber.id, kwh: 44, readingAt: new Date().toISOString() }])));
     if (url.includes("/api/subscribers/")) return Promise.resolve(json(subscriber));
     if (url.includes("/api/subscribers")) return Promise.resolve(json(page([subscriber])));
     if (url.includes("/api/tiers")) return Promise.resolve(json([tier]));
-    if (url.includes("/api/invoices/") && url.includes("/payments")) return Promise.resolve(json([{ id: "p1", invoiceId: invoice.id, subscriberId: subscriber.id, currency: "USD", tenderedAmount: 5, appliedUsd: 5, appliedLbp: 450000, method: "CASH" }]));
-    if (url.includes("/api/invoices/")) return Promise.resolve(json(invoice));
-    if (url.includes("/api/invoices")) return Promise.resolve(json(page([invoice])));
+    if (url.includes("/api/invoices/") && url.includes("/payments")) return Promise.resolve(json(currentPayments));
+    if (url.includes("/api/invoices/")) return Promise.resolve(json(currentInvoice));
+    if (url.includes("/api/invoices")) return Promise.resolve(json(page([currentInvoice])));
     if (url.includes("/api/outages")) return Promise.resolve(json([outage]));
     if (url.includes("/api/analytics/collection-rate")) return Promise.resolve(json([{ periodStart: "2026-06-01", periodEnd: "2026-06-30", issuedUsd: 12, issuedLbp: 1080000, collectedUsd: 6, collectedLbp: 540000, rate: 0.5 }]));
     if (url.includes("/api/analytics/risk")) return Promise.resolve(json(page([{ readingId: "r1", subscriberId: subscriber.id, score: 0.8, reason: "ZERO_DELTA" }])));
@@ -38,10 +46,10 @@ function installGatewayMock() {
   }));
 }
 
-function renderOperator(route: string) {
+function renderOperator(route: string, options?: Parameters<typeof installGatewayMock>[0]) {
   writeAccessToken("a");
   installMockWebSocket();
-  installGatewayMock();
+  installGatewayMock(options);
   return render(
     <MemoryRouter initialEntries={[route]}>
       <AuthProvider><App /></AuthProvider>
@@ -87,6 +95,15 @@ describe("operator pages", () => {
     outages.unmount();
   });
 
+  it("shows held invoice count after a mixed billing run", async () => {
+    renderOperator("/operator/billing", { billingResult: { issuedCount: 1, needsReviewCount: 1 } });
+
+    await screen.findByText("Month close");
+    fireEvent.click(screen.getByRole("button", { name: "Run billing" }));
+
+    await screen.findByText("1 invoices issued, 1 need review");
+  });
+
   it("submits ledger edit forms", async () => {
     const subscribers = renderOperator("/operator/subscribers");
     await screen.findByText("Rana");
@@ -115,5 +132,24 @@ describe("operator pages", () => {
     fireEvent.change(screen.getByPlaceholderText("Amount"), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Record payment" }));
     await waitFor(() => expect((fetch as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled());
+  });
+
+  it("shows review actions and hides payment form for held invoices", async () => {
+    const held = { ...invoice, amountUsd: 0, amountLbp: 0, kwhConsumed: 0, status: "NEEDS_REVIEW" };
+
+    renderOperator(`/operator/invoices/${invoice.id}`, { currentInvoice: held, payments: [] });
+
+    await screen.findByText(/record a corrective reading/i);
+    expect(screen.queryByText("Record payment")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Re-issue" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/invoices/22222222-2222-4222-8222-222222222222/reissue"), expect.anything()));
+  });
+
+  it("allows voiding an issued invoice only when it has no payments", async () => {
+    renderOperator(`/operator/invoices/${invoice.id}`, { payments: [] });
+
+    await screen.findByText("Record payment");
+    fireEvent.click(screen.getByRole("button", { name: "Void invoice" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/invoices/22222222-2222-4222-8222-222222222222/void"), expect.anything()));
   });
 });

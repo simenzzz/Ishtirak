@@ -66,6 +66,16 @@ export function registerCoreRoutes(router: Router, config: Config): void {
   );
   router.get("/invoices", staff, forwardToCore(config, "/invoices", { querySchema: pageQuerySchema }));
   router.get("/invoices/:id", staff, forwardToCore(config, core("/invoices/:id"), { paramSchema: uuidParamSchema }));
+  router.post(
+    "/invoices/:id/reissue",
+    admin,
+    forwardToCore(config, core("/invoices/:id/reissue"), { paramSchema: uuidParamSchema }),
+  );
+  router.post(
+    "/invoices/:id/void",
+    admin,
+    forwardToCore(config, core("/invoices/:id/void"), { paramSchema: uuidParamSchema }),
+  );
   router.get(
     "/invoices/:id/payments",
     staff,

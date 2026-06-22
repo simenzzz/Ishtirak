@@ -6,6 +6,11 @@ import { SEEDED_SUBSCRIBER_ID, USERS, login, recordReading } from "./helpers";
  * Showcase flow 1 — Billing run.
  * Operator records readings and runs billing; the subscriber, sitting on the bill
  * page, receives the `invoice.ready` WebSocket push and sees the new bill appear.
+ *
+ * Ordering note: specs share the seeded subscriber and run serially (workers: 1).
+ * This spec must run before any that record a meter rollback (e.g. tampering's
+ * 500→50) so billing's period-end reading isn't a lower value, which billing
+ * rejects as a negative consumption delta. The filename sorts first; keep it so.
  */
 test("operator billing run pushes a live bill to the subscriber", async ({ browser }) => {
   const operatorCtx = await browser.newContext();

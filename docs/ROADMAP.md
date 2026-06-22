@@ -239,7 +239,7 @@ render; coverage ≥ 80%. Playwright E2E remains unchecked until Phase 6.
 
 **Scope.** Production-readiness. This phase is delivered as a **focused subset** — the
 high-value, well-scoped items below — with observability, ML detection, and
-performance load-testing consciously deferred as over-engineering for the v1 demo.
+performance load-testing consciously deferred as over-engineering for v1.
 
 - [x] **Playwright E2E** for the three showcase flows from Phase 5 against the full
   docker-compose stack: config + `web/e2e/` specs (billing, tampering, outage) using
@@ -255,15 +255,15 @@ performance load-testing consciously deferred as over-engineering for the v1 dem
   logout (best-effort) while always clearing the cookie. (Gateway endpoint rate
   limiting was already present from Phase 4: auth 10/min, API 300/min.)
 - [ ] **Observability**: metrics, tracing, structured-log aggregation across services.
-  Deferred (heavy infra, low demo value).
+  Deferred (heavy infra, low value for v1).
 - [ ] **Initial ML detection (3b, cold-start)**: add scikit-learn; IsolationForest on
   the same feature vector, complementing the rules (ADR-005). Deferred — the v1 model
   cold-starts with no training data and the capture store does not persist feature
-  vectors, so the demo value is low.
+  vectors, so the value for v1 is low.
 - [ ] **Resilience — remaining**: further idempotency hardening and graceful
   degradation beyond the DLQ/retry above.
 - [ ] **Performance**: load-test the billing run, the reading stream, and WS fan-out.
-  Deferred (no concrete scale targets for the demo).
+  Deferred (no concrete scale targets for v1).
 - [ ] **Security — remaining**: full `security-reviewer` sweep; secret rotation; and,
   for a cross-*site* web/gateway deployment, `SameSite=None; Secure` cookies plus CSRF
   protection on `POST /api/auth/refresh` (today's `SameSite=Strict` suits the
@@ -288,14 +288,17 @@ performance load-testing consciously deferred as over-engineering for the v1 dem
     under one registrable domain over HTTPS (`app.example.com` + `api.example.com`,
     or a single host with the gateway under `/api`).
 
-**Exit criteria.** Observability in place; DLQ/retry proven; ML detector deployed
-alongside rules; security sweep clean.
+**Exit criteria.** The focused subset is delivered and green: Playwright E2E for
+the three showcase flows passes against the live stack; consumer DLQ/retry is
+proven; refresh-token revocation on logout works. Observability, initial ML
+detection, performance load-testing, and the full security sweep are consciously
+deferred (see the unchecked items above) and do not gate v1.
 
 ---
 
 ## Post-v1 / operational track — Continuous learning (MLOps) ⏳
 
-> Realized **after** the v1 demo flows are live and accumulating real production
+> Realized **after** the v1 flows are live and accumulating real production
 > data. Distinct from v1 model quality (ADR-007).
 
 - **Retraining loop**: scheduled job over the capture store (production traffic +

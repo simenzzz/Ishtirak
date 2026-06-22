@@ -34,3 +34,7 @@ htmlcov/
 # Build artifacts
 *.log
 coverage/
+
+# Playwright E2E artifacts
+playwright-report/
+test-results/

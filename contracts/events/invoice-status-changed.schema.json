@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ishtirak.dev/events/invoice-status-changed.schema.json",
+  "title": "InvoiceStatusChanged",
+  "description": "Emitted when an existing invoice changes state without becoming a ready bill.",
+  "type": "object",
+  "required": ["eventId", "eventType", "operatorId", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "invoice.status.changed" },
+    "operatorId": { "type": "string", "format": "uuid" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["invoiceId", "subscriberId", "periodStart", "periodEnd", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "invoiceId": { "type": "string", "format": "uuid" },
+        "subscriberId": { "type": "string", "format": "uuid" },
+        "periodStart": { "type": "string", "format": "date" },
+        "periodEnd": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["NEEDS_REVIEW", "VOID"] }
+      }
+    }
+  }
+}

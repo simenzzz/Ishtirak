@@ -1,18 +1,22 @@
 package dev.ishtirak.core.bootstrap;
 
 import dev.ishtirak.core.domain.ActorRole;
+import dev.ishtirak.core.domain.Reading;
 import dev.ishtirak.core.domain.ResourceStatus;
 import dev.ishtirak.core.domain.Subscriber;
 import dev.ishtirak.core.domain.TariffPolicy;
 import dev.ishtirak.core.domain.Tier;
 import dev.ishtirak.core.persistence.OperatorEntity;
 import dev.ishtirak.core.persistence.OperatorMembershipEntity;
+import dev.ishtirak.core.persistence.ReadingEntity;
 import dev.ishtirak.core.persistence.Repositories;
 import dev.ishtirak.core.persistence.SubscriberEntity;
 import dev.ishtirak.core.persistence.TierEntity;
 import dev.ishtirak.core.persistence.UserEntity;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +31,7 @@ public class DemoSeedData {
     public static final UUID OPERATOR_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     public static final UUID TIER_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     public static final UUID SUBSCRIBER_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    public static final UUID BASELINE_READING_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
     public static final UUID ADMIN_USER_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
     public static final UUID STAFF_USER_ID = UUID.fromString("40000000-0000-0000-0000-000000000002");
     public static final UUID SUBSCRIBER_USER_ID = UUID.fromString("40000000-0000-0000-0000-000000000003");
@@ -36,6 +41,7 @@ public class DemoSeedData {
             Repositories.Operators operators,
             Repositories.Tiers tiers,
             Repositories.Subscribers subscribers,
+            Repositories.Readings readings,
             Repositories.Users users,
             Repositories.Memberships memberships,
             PasswordEncoder encoder,
@@ -66,6 +72,15 @@ public class DemoSeedData {
                     "M-1",
                     ResourceStatus.ACTIVE,
                     clock.instant()))));
+            // Baseline meter reading anchored at the first of the current month, so a
+            // billing run for the current period has a "start" reading to compute the
+            // consumption delta against (readings recorded later in the period close it).
+            readings.findById(BASELINE_READING_ID).orElseGet(() -> readings.save(new ReadingEntity(new Reading(
+                    BASELINE_READING_ID,
+                    OPERATOR_ID,
+                    SUBSCRIBER_ID,
+                    new BigDecimal("90"),
+                    LocalDate.now(clock).withDayOfMonth(1).atStartOfDay().toInstant(ZoneOffset.UTC)))));
             seedUser(users, memberships, encoder, clock, ADMIN_USER_ID, "admin@ishtirak.local",
                     demoPassword, ActorRole.OPERATOR_ADMIN, null);
             seedUser(users, memberships, encoder, clock, STAFF_USER_ID, "staff@ishtirak.local",

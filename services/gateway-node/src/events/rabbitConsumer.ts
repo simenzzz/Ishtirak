@@ -2,6 +2,7 @@ import amqp from "amqplib";
 
 import { type Config } from "../config.js";
 import { logger } from "../logger.js";
+import { connectWithRetry } from "./amqpConnect.js";
 import { mapEventToFanout, parseGatewayEvent } from "./envelope.js";
 import { type RedisFanoutRuntime } from "./redisFanout.js";
 
@@ -13,7 +14,7 @@ const queue = "gateway.ws-fanout";
 // consumer's.
 const deadLetterExchange = "gateway.ws-fanout.dlx";
 const deadLetterQueue = "gateway.ws-fanout.dlq";
-const routingKeys = ["outage.scheduled", "invoice.issued", "reading.flagged"] as const;
+const routingKeys = ["outage.scheduled", "invoice.issued", "invoice.status.changed", "reading.flagged"] as const;
 
 export type RabbitRuntime = Readonly<{
   close(): Promise<void>;
@@ -58,7 +59,10 @@ export async function handleGatewayMessage(
 }
 
 export async function startRabbitConsumer(config: Config, redisFanout: RedisFanoutRuntime): Promise<RabbitRuntime> {
-  const connection = await amqp.connect(config.RABBITMQ_URL);
+  const connection = await connectWithRetry(config.RABBITMQ_URL, {
+    maxAttempts: config.RABBITMQ_CONNECT_MAX_ATTEMPTS,
+    retryDelayMs: config.RABBITMQ_CONNECT_RETRY_DELAY_MS,
+  });
   const channel = await connection.createChannel();
   let ready = true;
   const markClosed = () => {

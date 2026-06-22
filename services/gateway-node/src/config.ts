@@ -9,6 +9,11 @@ const envSchema = z.object({
   CORE_JAVA_URL: z.string().url(),
   ANALYTICS_URL: z.string().url(),
   RABBITMQ_URL: z.string().url(),
+  // Initial RabbitMQ connection is retried this many times (with the delay below)
+  // to ride out the gap between the broker reporting healthy and its AMQP listener
+  // actually accepting connections. Defaults give ~30s of headroom.
+  RABBITMQ_CONNECT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(30),
+  RABBITMQ_CONNECT_RETRY_DELAY_MS: z.coerce.number().int().positive().default(1000),
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   GATEWAY_SERVICE_TOKEN_SECRET: z
@@ -29,6 +34,10 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   // Refresh-cookie lifetime; mirrors core-java's 30-day refresh token TTL.
   REFRESH_COOKIE_MAX_AGE_SECS: z.coerce.number().int().positive().default(2592000),
+  // Max auth requests (login/refresh/etc.) per client per 60s window. Defaults to
+  // a tight production value; raise it for E2E where one host bursts many logins
+  // and per-navigation refreshes.
+  AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
 });
 
 export type Config = Readonly<z.infer<typeof envSchema>>;

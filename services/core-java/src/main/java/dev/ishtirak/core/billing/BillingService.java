@@ -23,6 +23,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,7 @@ public class BillingService {
     private final Repositories.Tiers tiers;
     private final Repositories.Readings readings;
     private final Repositories.Invoices invoices;
+    private final Repositories.Payments payments;
     private final Repositories.BillingRuns billingRuns;
     private final OutboxService outbox;
     private final BillingCalculator calculator;
@@ -48,6 +50,7 @@ public class BillingService {
             Repositories.Tiers tiers,
             Repositories.Readings readings,
             Repositories.Invoices invoices,
+            Repositories.Payments payments,
             Repositories.BillingRuns billingRuns,
             OutboxService outbox,
             BillingCalculator calculator,
@@ -57,6 +60,7 @@ public class BillingService {
         this.tiers = tiers;
         this.readings = readings;
         this.invoices = invoices;
+        this.payments = payments;
         this.billingRuns = billingRuns;
         this.outbox = outbox;
         this.calculator = calculator;
@@ -115,7 +119,7 @@ public class BillingService {
     }
 
     public List<Invoice> listMyInvoices(UUID operatorId, UUID subscriberId) {
-        return invoices.findByOperatorIdAndSubscriberId(operatorId, subscriberId).stream()
+        return invoices.findByOperatorIdAndSubscriberIdOrderByPeriodEndDescIssuedAtDesc(operatorId, subscriberId).stream()
                 .map(InvoiceEntity::toDomain)
                 .toList();
     }
@@ -128,12 +132,63 @@ public class BillingService {
         return invoice;
     }
 
+    /**
+     * Re-issue an invoice that was held for review (e.g. after the operator recorded a
+     * corrective meter reading). Recomputes consumption from the current readings; on
+     * success the invoice becomes ISSUED and the subscriber gets the bill push.
+     */
+    @Transactional
+    public Invoice reissue(UUID operatorId, UUID invoiceId) {
+        InvoiceEntity entity = invoices.lockByOperatorIdAndId(operatorId, invoiceId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Invoice not found"));
+        Invoice invoice = entity.toDomain();
+        if (invoice.status() != InvoiceStatus.NEEDS_REVIEW) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Only invoices under review can be re-issued");
+        }
+        OperatorBillingSettings settings = operators.lockById(operatorId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Operator not found"))
+                .toDomain();
+        Subscriber subscriber = subscribers.findByOperatorIdAndId(operatorId, invoice.subscriberId())
+                .map(SubscriberEntity::toDomain)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Subscriber not found"));
+        Tier tier = tiers.findByOperatorIdAndId(operatorId, subscriber.tierId())
+                .map(TierEntity::toDomain)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Tier not found"));
+        BigDecimal kwhConsumed = computeConsumption(operatorId, subscriber.id(), invoice.periodStart(), invoice.periodEnd())
+                .orElseThrow(() -> new ApiException(HttpStatus.CONFLICT, "CONFLICT",
+                        "Consumption still cannot be computed; record a corrective reading first"));
+        BillingCalculator.InvoiceAmounts amounts =
+                calculator.calculate(tier, tier.effectivePolicy(settings.defaultTariffPolicy()), kwhConsumed);
+        entity.reissue(amounts.amountUsd(), amounts.amountLbp(), kwhConsumed);
+        Invoice saved = entity.toDomain();
+        enqueueInvoiceIssued(saved);
+        return saved;
+    }
+
+    /** Void an under-review or unpaid issued invoice (operator write-off / meter fault). */
+    @Transactional
+    public Invoice voidInvoice(UUID operatorId, UUID invoiceId) {
+        InvoiceEntity entity = invoices.lockByOperatorIdAndId(operatorId, invoiceId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Invoice not found"));
+        Invoice invoice = entity.toDomain();
+        if (invoice.status() != InvoiceStatus.NEEDS_REVIEW && invoice.status() != InvoiceStatus.ISSUED) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Only an under-review or issued invoice can be voided");
+        }
+        if (!payments.findByOperatorIdAndInvoiceId(operatorId, invoiceId).isEmpty()) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Cannot void an invoice that has recorded payments");
+        }
+        entity.applyStatus(InvoiceStatus.VOID);
+        Invoice saved = entity.toDomain();
+        enqueueInvoiceStatusChanged(saved);
+        return saved;
+    }
+
     private Invoice issueInvoice(
             UUID operatorId,
             Subscriber subscriber,
             OperatorBillingSettings settings,
-                LocalDate periodStart,
-                LocalDate periodEnd) {
+            LocalDate periodStart,
+            LocalDate periodEnd) {
         Tier tier = tiers.findByOperatorIdAndId(operatorId, subscriber.tierId())
                 .map(TierEntity::toDomain)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Tier not found"));
@@ -142,7 +197,26 @@ public class BillingService {
         if (existing.isPresent()) {
             return existing.get().toDomain();
         }
-        BigDecimal kwhConsumed = consumption(operatorId, subscriber.id(), periodStart, periodEnd);
+        Optional<BigDecimal> consumption = computeConsumption(operatorId, subscriber.id(), periodStart, periodEnd);
+        if (consumption.isEmpty()) {
+            // Consumption can't be computed (missing reading or meter rollback). Hold the
+            // invoice for operator review rather than aborting the whole run; emit no push.
+            Invoice review = new Invoice(
+                    UUID.randomUUID(),
+                    operatorId,
+                    subscriber.id(),
+                    periodStart,
+                    periodEnd,
+                    BigDecimal.ZERO.setScale(2),
+                    0L,
+                    BigDecimal.ZERO,
+                    InvoiceStatus.NEEDS_REVIEW,
+                    clock.instant());
+            Invoice saved = invoices.save(new InvoiceEntity(review)).toDomain();
+            enqueueInvoiceStatusChanged(saved);
+            return saved;
+        }
+        BigDecimal kwhConsumed = consumption.get();
         BillingCalculator.InvoiceAmounts amounts =
                 calculator.calculate(tier, tier.effectivePolicy(settings.defaultTariffPolicy()), kwhConsumed);
         Invoice invoice = new Invoice(
@@ -157,31 +231,50 @@ public class BillingService {
                 InvoiceStatus.ISSUED,
                 clock.instant());
         Invoice saved = invoices.save(new InvoiceEntity(invoice)).toDomain();
-        outbox.enqueue("invoice.issued", operatorId, Map.of(
-                "invoiceId", saved.id(),
-                "subscriberId", saved.subscriberId(),
-                "periodStart", saved.periodStart(),
-                "periodEnd", saved.periodEnd(),
-                "amountUsd", saved.amountUsd(),
-                "amountLbp", saved.amountLbp(),
-                "kwhConsumed", saved.kwhConsumed()));
+        enqueueInvoiceIssued(saved);
         return saved;
     }
 
-    private BigDecimal consumption(UUID operatorId, UUID subscriberId, LocalDate periodStart, LocalDate periodEnd) {
-        BigDecimal start = readingBefore(operatorId, subscriberId, periodStart.plusDays(1)).kwh();
-        BigDecimal end = readingBefore(operatorId, subscriberId, periodEnd.plusDays(1)).kwh();
-        BigDecimal delta = end.subtract(start);
-        if (delta.signum() < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "kWh delta must be >= 0");
-        }
-        return delta;
+    private void enqueueInvoiceIssued(Invoice invoice) {
+        outbox.enqueue("invoice.issued", invoice.operatorId(), Map.of(
+                "invoiceId", invoice.id(),
+                "subscriberId", invoice.subscriberId(),
+                "periodStart", invoice.periodStart(),
+                "periodEnd", invoice.periodEnd(),
+                "amountUsd", invoice.amountUsd(),
+                "amountLbp", invoice.amountLbp(),
+                "kwhConsumed", invoice.kwhConsumed()));
     }
 
-    private Reading readingBefore(UUID operatorId, UUID subscriberId, LocalDate exclusiveDate) {
+    private void enqueueInvoiceStatusChanged(Invoice invoice) {
+        outbox.enqueue("invoice.status.changed", invoice.operatorId(), Map.of(
+                "invoiceId", invoice.id(),
+                "subscriberId", invoice.subscriberId(),
+                "periodStart", invoice.periodStart(),
+                "periodEnd", invoice.periodEnd(),
+                "status", invoice.status()));
+    }
+
+    /**
+     * Consumption for a period = (reading at period end) - (reading at period start).
+     * Empty when either anchor reading is missing or the meter rolled back (negative
+     * delta) — the caller holds such an invoice for review instead of failing the run.
+     */
+    private Optional<BigDecimal> computeConsumption(
+            UUID operatorId, UUID subscriberId, LocalDate periodStart, LocalDate periodEnd) {
+        Optional<BigDecimal> start = readingBefore(operatorId, subscriberId, periodStart.plusDays(1));
+        Optional<BigDecimal> end = readingBefore(operatorId, subscriberId, periodEnd.plusDays(1));
+        if (start.isEmpty() || end.isEmpty()) {
+            return Optional.empty();
+        }
+        BigDecimal delta = end.get().subtract(start.get());
+        return delta.signum() < 0 ? Optional.empty() : Optional.of(delta);
+    }
+
+    private Optional<BigDecimal> readingBefore(UUID operatorId, UUID subscriberId, LocalDate exclusiveDate) {
         return readings.findFirstByOperatorIdAndSubscriberIdAndReadingAtLessThanOrderByReadingAtDesc(
                         operatorId, subscriberId, exclusiveDate.atStartOfDay().toInstant(ZoneOffset.UTC))
                 .map(ReadingEntity::toDomain)
-                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Missing period reading"));
+                .map(Reading::kwh);
     }
 }

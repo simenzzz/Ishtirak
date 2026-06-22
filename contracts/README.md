@@ -20,6 +20,7 @@ JSON Schema (draft 2020-12). Every event shares a common envelope:
 |-------|-------------|--------------|
 | [`reading-recorded`](events/reading-recorded.schema.json) | `reading.recorded` | a meter reading is ingested |
 | [`invoice-issued`](events/invoice-issued.schema.json) | `invoice.issued` | the billing run produces an invoice |
+| [`invoice-status-changed`](events/invoice-status-changed.schema.json) | `invoice.status.changed` | an invoice moves to a non-payable state |
 | [`payment-received`](events/payment-received.schema.json) | `payment.received` | a payment is recorded |
 | [`outage-scheduled`](events/outage-scheduled.schema.json) | `outage.scheduled` | an operator schedules a load-shedding window |
 
@@ -48,7 +49,7 @@ the event payloads.
 ## Async API (`asyncapi.yaml`)
 
 [`asyncapi.yaml`](asyncapi.yaml) (**AsyncAPI 3.1**) describes the asynchronous
-surface: the `ishtirak.events` topic exchange with the four domain events (each
+surface: the `ishtirak.events` topic exchange with the core domain events (each
 message `$ref`s the matching `events/*.schema.json`), and the gateway WebSocket
 protocol (server↔client message envelopes). Operations are annotated with the
 producing/consuming service.

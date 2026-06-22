@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 INFRA_DIR="$(pwd)"
 ENV_FILE="${INFRA_DIR}/.env.e2e"
 COMPOSE=(docker compose --env-file "${ENV_FILE}")
-TEARDOWN=false
+TEARDOWN=true
 [ "${1:-}" = "--down" ] && TEARDOWN=true
 
 gen_secret() { openssl rand -base64 48; }
@@ -31,9 +31,13 @@ DEMO_PASSWORD="${DEMO_PASSWORD:-ishtirak-demo-password}"
   echo "WEB_ORIGIN=http://localhost:3000"
   echo "COOKIE_SECURE=true"
   echo "REFRESH_COOKIE_MAX_AGE_SECS=2592000"
+  echo "AUTH_RATE_LIMIT=${AUTH_RATE_LIMIT:-200}"
   echo "CORE_JAVA_PROFILES=dev"
   echo "DEMO_PASSWORD=${DEMO_PASSWORD}"
 } > "${ENV_FILE}"
+
+echo "==> Resetting any previous stack/volumes for a clean, deterministic seed..."
+"${COMPOSE[@]}" down -v --remove-orphans
 
 echo "==> Building and starting the stack..."
 "${COMPOSE[@]}" up -d --build

@@ -29,28 +29,24 @@ public class ReadingService {
     }
 
     @Transactional
-    public Reading record(UUID operatorId, RecordReadingRequest request) {
+    public Reading record(UUID operatorId, boolean admin, RecordReadingRequest request) {
         subscribers.lockByOperatorIdAndId(operatorId, request.subscriberId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Subscriber not found"));
-        readings.findFirstByOperatorIdAndSubscriberIdAndReadingAtLessThanEqualOrderByReadingAtDesc(
+        var previous = readings.findFirstByOperatorIdAndSubscriberIdAndReadingAtLessThanEqualOrderByReadingAtDesc(
                         operatorId, request.subscriberId(), request.readingAt())
                 .map(ReadingEntity::toDomain)
-                .ifPresent(previous -> {
-                    if (request.readingAt().equals(previous.readingAt())) {
-                        throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Reading already exists at this time");
-                    }
-                    if (request.kwh().compareTo(previous.kwh()) < 0) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "kWh must be monotonic");
-                    }
-                });
-        readings.findFirstByOperatorIdAndSubscriberIdAndReadingAtGreaterThanOrderByReadingAtAsc(
-                        operatorId, request.subscriberId(), request.readingAt())
-                .map(ReadingEntity::toDomain)
-                .ifPresent(next -> {
-                    if (request.kwh().compareTo(next.kwh()) > 0) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "kWh must be monotonic");
-                    }
-                });
+                .orElse(null);
+        if (previous != null && request.readingAt().equals(previous.readingAt())) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Reading already exists at this time");
+        }
+        var latest = readings.findByOperatorIdAndSubscriberIdOrderByReadingAtDesc(operatorId, request.subscriberId()).stream()
+                .findFirst()
+                .map(ReadingEntity::toDomain);
+        boolean backdated = latest.isPresent() && request.readingAt().isBefore(latest.get().readingAt());
+        boolean rollback = previous != null && request.kwh().compareTo(previous.kwh()) < 0;
+        if (!admin && (backdated || rollback)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Admin role required for corrective readings");
+        }
         Reading reading = new Reading(UUID.randomUUID(), operatorId, request.subscriberId(), request.kwh(), request.readingAt());
         Reading saved = readings.save(new ReadingEntity(reading)).toDomain();
         outbox.enqueue("reading.recorded", operatorId, Map.of(

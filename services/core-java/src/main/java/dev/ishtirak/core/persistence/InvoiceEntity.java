@@ -57,6 +57,14 @@ public class InvoiceEntity {
         status = nextStatus;
     }
 
+    /** Replace the computed amounts/consumption and mark the invoice ISSUED (re-issue path). */
+    public void reissue(BigDecimal nextAmountUsd, long nextAmountLbp, BigDecimal nextKwhConsumed) {
+        amountUsd = nextAmountUsd;
+        amountLbp = nextAmountLbp;
+        kwhConsumed = nextKwhConsumed;
+        status = InvoiceStatus.ISSUED;
+    }
+
     public Invoice toDomain() {
         return new Invoice(id, operatorId, subscriberId, periodStart, periodEnd,
                 amountUsd, amountLbp, kwhConsumed, status, issuedAt);

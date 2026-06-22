@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass
+from typing import Awaitable, Callable
 
 import aio_pika
+from aio_pika.exceptions import AMQPError
 
 from app.config import Settings
+
+logger = logging.getLogger(__name__)
+
+Connector = Callable[[str], Awaitable[aio_pika.abc.AbstractRobustConnection]]
 
 
 @dataclass
@@ -19,8 +27,41 @@ class Broker:
         await self.connection.close()
 
 
+async def connect_robust_with_retry(
+    settings: Settings,
+    *,
+    connector: Connector = aio_pika.connect_robust,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> aio_pika.abc.AbstractRobustConnection:
+    """Open a robust connection, retrying the *initial* connect with a fixed backoff.
+
+    ``connect_robust`` only auto-reconnects once it has connected at least once, so a
+    broker that is healthy-but-not-yet-listening at boot still kills startup. Retrying
+    bridges that gap. ``connector`` and ``sleep`` are injectable for unit tests.
+    """
+
+    last_error: BaseException | None = None
+    for attempt in range(1, settings.rabbitmq_connect_max_attempts + 1):
+        try:
+            return await connector(settings.rabbitmq_url)
+        except (AMQPError, OSError) as error:
+            last_error = error
+            if attempt >= settings.rabbitmq_connect_max_attempts:
+                break
+            logger.warning(
+                "rabbitmq connect failed (attempt %d/%d); retrying in %ds",
+                attempt,
+                settings.rabbitmq_connect_max_attempts,
+                settings.rabbitmq_connect_retry_delay_secs,
+            )
+            await sleep(settings.rabbitmq_connect_retry_delay_secs)
+
+    logger.error("rabbitmq connect exhausted %d attempts", settings.rabbitmq_connect_max_attempts)
+    raise last_error  # type: ignore[misc]  # loop runs >=1 time, so this is set
+
+
 async def connect(settings: Settings) -> Broker:
-    connection = await aio_pika.connect_robust(settings.rabbitmq_url)
+    connection = await connect_robust_with_retry(settings)
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=16)
     exchange = await channel.declare_exchange(

@@ -28,7 +28,7 @@ public class ReadingController {
     @ResponseStatus(HttpStatus.CREATED)
     ReadingResponse record(RequestIdentity identity, @Valid @RequestBody ReadingService.RecordReadingRequest request) {
         identity.requireStaffOrAdmin();
-        return ReadingResponse.from(readingService.record(identity.operatorId(), request));
+        return ReadingResponse.from(readingService.record(identity.operatorId(), identity.isAdmin(), request));
     }
 
     @GetMapping("/subscribers/{id}/readings")

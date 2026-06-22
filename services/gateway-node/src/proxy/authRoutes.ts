@@ -74,7 +74,7 @@ export function requireRefreshCookie(req: Request, res: Response, next: NextFunc
 }
 
 export function registerAuthRoutes(router: Router, config: Config, redis?: Redis): void {
-  const limiter = fixedWindowRateLimit({ redis, limit: 10, windowSecs: 60 });
+  const limiter = fixedWindowRateLimit({ redis, limit: config.AUTH_RATE_LIMIT, windowSecs: 60 });
   const onResponse = (_req: Request, res: Response, status: number, body: unknown) =>
     captureRefreshToken(res, status, body, config);
 

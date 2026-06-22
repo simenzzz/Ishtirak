@@ -52,15 +52,13 @@ public interface Repositories {
 
         Optional<ReadingEntity> findFirstByOperatorIdAndSubscriberIdAndReadingAtLessThanOrderByReadingAtDesc(
                 UUID operatorId, UUID subscriberId, Instant readingAt);
-
-        Optional<ReadingEntity> findFirstByOperatorIdAndSubscriberIdAndReadingAtGreaterThanOrderByReadingAtAsc(
-                UUID operatorId, UUID subscriberId, Instant readingAt);
     }
 
     interface Invoices extends JpaRepository<InvoiceEntity, UUID> {
         Optional<InvoiceEntity> findByOperatorIdAndId(UUID operatorId, UUID id);
         List<InvoiceEntity> findByOperatorId(UUID operatorId);
-        List<InvoiceEntity> findByOperatorIdAndSubscriberId(UUID operatorId, UUID subscriberId);
+        List<InvoiceEntity> findByOperatorIdAndSubscriberIdOrderByPeriodEndDescIssuedAtDesc(
+                UUID operatorId, UUID subscriberId);
         List<InvoiceEntity> findByIdIn(List<UUID> ids);
 
         Optional<InvoiceEntity> findByOperatorIdAndSubscriberIdAndPeriodStartAndPeriodEnd(
