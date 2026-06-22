@@ -175,7 +175,7 @@ enums) with a `toDomain()` method. Entities **not** mirrored 1:1 above:
 | `ReadingResponse` | `id`, `subscriberId`, `kwh`, `readingAt` |
 | `OutageResponse` | `id`, `startsAt`, `endsAt`, `reason`, `createdAt` |
 | `OutageScheduledResponse` | `outageId`, `startsAt`, `endsAt`, `reason` |
-| `BillingRunResponse` | `issued`, `issuedCount`, `needsReviewCount`, `periodStart`, `periodEnd` (`issued` and `issuedCount` currently duplicate the ready-invoice count; `needsReviewCount` is held for review) |
+| `BillingRunResponse` | `issuedCount` (payable ISSUED invoices), `needsReviewCount` (held for review), `periodStart`, `periodEnd` |
 | `InvoiceResponse` | `id`, `subscriberId`, `periodStart`, `periodEnd`, `amountUsd`, `amountLbp`, `kwhConsumed`, `status`, `issuedAt` |
 | `PaymentResponse` | `id`, `invoiceId`, `subscriberId`, `currency`, `tenderedAmount`, `appliedUsd`, `appliedLbp`, `method`, `receivedAt` |
 | `PageResponse<T>` | `data: List<T>`, `meta: PageMeta{total, page, limit}` |

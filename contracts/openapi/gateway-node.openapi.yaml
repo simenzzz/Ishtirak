@@ -512,9 +512,8 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [issued, issuedCount, needsReviewCount, periodStart, periodEnd]
+                required: [issuedCount, needsReviewCount, periodStart, periodEnd]
                 properties:
-                  issued: { type: integer, minimum: 0, description: Legacy alias for issuedCount. }
                   issuedCount: { type: integer, minimum: 0 }
                   needsReviewCount: { type: integer, minimum: 0 }
                   periodStart: { type: string, format: date }

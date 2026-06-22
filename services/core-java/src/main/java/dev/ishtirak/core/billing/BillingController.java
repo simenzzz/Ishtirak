@@ -47,7 +47,7 @@ public class BillingController {
                 identity.operatorId(), request.periodStart(), request.periodEnd(), idempotencyKey);
         int issued = (int) invoices.stream().filter(invoice -> invoice.status() == InvoiceStatus.ISSUED).count();
         int needsReview = (int) invoices.stream().filter(invoice -> invoice.status() == InvoiceStatus.NEEDS_REVIEW).count();
-        return new BillingRunResponse(issued, issued, needsReview, request.periodStart(), request.periodEnd());
+        return new BillingRunResponse(issued, needsReview, request.periodStart(), request.periodEnd());
     }
 
     @PostMapping("/invoices/{id}/reissue")
@@ -126,7 +126,6 @@ public class BillingController {
     }
 
     public record BillingRunResponse(
-            int issued,
             int issuedCount,
             int needsReviewCount,
             LocalDate periodStart,

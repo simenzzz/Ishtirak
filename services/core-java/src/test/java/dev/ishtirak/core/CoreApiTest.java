@@ -58,7 +58,7 @@ class CoreApiTest {
                                 {"periodStart":"2026-01-01","periodEnd":"2026-01-31"}
                                 """))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.issued").value(1));
+                .andExpect(jsonPath("$.issuedCount").value(1));
 
         mockMvc.perform(get("/me/invoices")
                         .headers(headers("SUBSCRIBER", subscriberId)))
@@ -101,7 +101,7 @@ class CoreApiTest {
                                     {"periodStart":"2026-01-01","periodEnd":"2026-01-31"}
                                     """))
                     .andExpect(status().isAccepted())
-                    .andExpect(jsonPath("$.issued").value(1));
+                    .andExpect(jsonPath("$.issuedCount").value(1));
         }
 
         mockMvc.perform(get("/invoices").headers(headers("OPERATOR_STAFF", null)))
