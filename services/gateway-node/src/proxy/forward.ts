@@ -14,6 +14,13 @@ export type ForwardOptions = Readonly<{
   querySchema?: z.ZodTypeAny;
   paramSchema?: z.ZodTypeAny;
   publicRoute?: boolean;
+  /**
+   * Pass the client's own `Authorization` header straight through to the upstream
+   * instead of minting a gateway service token. Used by the device-ingest route,
+   * where the credential is a device token the upstream (core-java) authenticates
+   * itself — the gateway never holds a user identity for these calls.
+   */
+  forwardClientAuthorization?: boolean;
   /** Override the body sent upstream (e.g. inject a cookie-sourced value). */
   requestBody?: (req: Request) => unknown;
   /**
@@ -57,7 +64,12 @@ export function forward(options: ForwardOptions) {
     if (idempotencyKey) {
       headers.set("idempotency-key", idempotencyKey);
     }
-    if (!options.publicRoute) {
+    if (options.forwardClientAuthorization) {
+      const clientAuthorization = req.header("authorization");
+      if (clientAuthorization) {
+        headers.set("authorization", clientAuthorization);
+      }
+    } else if (!options.publicRoute) {
       const identity = requireIdentity(req);
       headers.set("authorization", `Bearer ${mintServiceToken(identity, options.target, options.config)}`);
       headers.set("x-operator-id", identity.operatorId);

@@ -65,6 +65,23 @@ export const billingRunBodySchema = z.object({
   periodEnd: z.string().date(),
 });
 
+export const deviceMintBodySchema = z.object({
+  label: z.string().min(1).max(120),
+});
+
+export const ingestBatchBodySchema = z.object({
+  readings: z
+    .array(
+      z.object({
+        meterId: z.string().min(1).max(128),
+        kwh: z.number().min(0),
+        readingAt: z.string().datetime(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
 export const paymentBodySchema = z.object({
   invoiceId: z.string().uuid(),
   currency: z.enum(["USD", "LBP"]),

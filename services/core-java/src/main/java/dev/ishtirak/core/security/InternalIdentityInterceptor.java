@@ -52,7 +52,11 @@ public class InternalIdentityInterceptor implements HandlerInterceptor {
     }
 
     private static boolean isPublic(String uri) {
-        return uri.equals("/health") || uri.equals("/ready") || uri.startsWith("/actuator") || uri.startsWith("/auth/");
+        return uri.equals("/health")
+                || uri.equals("/ready")
+                || uri.startsWith("/actuator")
+                || uri.startsWith("/auth/")
+                || uri.startsWith("/ingest/");
     }
 
     private static boolean missingBearer(String authorization) {

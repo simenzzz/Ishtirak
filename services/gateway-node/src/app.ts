@@ -9,6 +9,7 @@ import { logger } from "./logger.js";
 import { registerAnalyticsRoutes } from "./proxy/analyticsRoutes.js";
 import { registerAuthRoutes } from "./proxy/authRoutes.js";
 import { registerCoreRoutes } from "./proxy/coreRoutes.js";
+import { registerIngestRoutes } from "./proxy/ingestRoutes.js";
 import { registerMeRoute } from "./proxy/meRoute.js";
 import { fixedWindowRateLimit } from "./rateLimit.js";
 
@@ -50,6 +51,7 @@ export function createApp(probeOrOptions: ReadinessProbe | AppOptions = alwaysRe
 
     const publicApi = Router();
     registerAuthRoutes(publicApi, options.config, options.redis);
+    registerIngestRoutes(publicApi, options.config, options.redis);
     app.use("/api", publicApi);
 
     const api = Router();

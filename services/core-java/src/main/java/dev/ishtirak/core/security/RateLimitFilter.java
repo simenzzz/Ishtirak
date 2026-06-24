@@ -18,16 +18,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final int mutationsPerMinute;
     private final int readingsPerMinute;
     private final int billingPerHour;
+    private final int ingestPerMinute;
     private final Clock clock = Clock.systemUTC();
     private final Map<String, Window> windows = new ConcurrentHashMap<>();
 
     public RateLimitFilter(
             @Value("${ishtirak.rate-limit.mutations-per-minute:60}") int mutationsPerMinute,
             @Value("${ishtirak.rate-limit.readings-per-minute:120}") int readingsPerMinute,
-            @Value("${ishtirak.rate-limit.billing-per-hour:3}") int billingPerHour) {
+            @Value("${ishtirak.rate-limit.billing-per-hour:3}") int billingPerHour,
+            @Value("${ishtirak.rate-limit.ingest-per-minute:300}") int ingestPerMinute) {
         this.mutationsPerMinute = mutationsPerMinute;
         this.readingsPerMinute = readingsPerMinute;
         this.billingPerHour = billingPerHour;
+        this.ingestPerMinute = ingestPerMinute;
     }
 
     @Override
@@ -71,6 +74,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         if ("POST".equals(request.getMethod()) && request.getRequestURI().equals("/readings")) {
             return new Limit("readings", readingsPerMinute, 60);
+        }
+        if ("POST".equals(request.getMethod()) && request.getRequestURI().equals("/ingest/readings")) {
+            return new Limit("ingest", ingestPerMinute, 60);
         }
         if (!"GET".equals(request.getMethod()) && !isPublic(request.getRequestURI())) {
             return new Limit("mutations", mutationsPerMinute, 60);

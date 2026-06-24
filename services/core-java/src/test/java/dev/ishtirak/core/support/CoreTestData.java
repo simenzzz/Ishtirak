@@ -29,6 +29,7 @@ public class CoreTestData {
     private final Repositories.Users users;
     private final Repositories.Memberships memberships;
     private final Repositories.RefreshTokens refreshTokens;
+    private final Repositories.DeviceTokens deviceTokens;
     private final Repositories.OutboxEvents outboxEvents;
     private final Clock clock;
 
@@ -44,6 +45,7 @@ public class CoreTestData {
             Repositories.Users users,
             Repositories.Memberships memberships,
             Repositories.RefreshTokens refreshTokens,
+            Repositories.DeviceTokens deviceTokens,
             Repositories.OutboxEvents outboxEvents,
             Clock clock) {
         this.operators = operators;
@@ -57,6 +59,7 @@ public class CoreTestData {
         this.users = users;
         this.memberships = memberships;
         this.refreshTokens = refreshTokens;
+        this.deviceTokens = deviceTokens;
         this.outboxEvents = outboxEvents;
         this.clock = clock;
     }
@@ -65,6 +68,7 @@ public class CoreTestData {
     public void reset() {
         outboxEvents.deleteAll();
         refreshTokens.deleteAll();
+        deviceTokens.deleteAll();
         billingRuns.deleteAll();
         payments.deleteAll();
         invoices.deleteAll();

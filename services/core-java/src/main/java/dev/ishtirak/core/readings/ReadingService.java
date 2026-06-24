@@ -47,7 +47,38 @@ public class ReadingService {
         if (!admin && (backdated || rollback)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Admin role required for corrective readings");
         }
-        Reading reading = new Reading(UUID.randomUUID(), operatorId, request.subscriberId(), request.kwh(), request.readingAt());
+        return persist(operatorId, request.subscriberId(), request.kwh(), request.readingAt());
+    }
+
+    /**
+     * Trusted ingest path for device-sourced readings. Unlike the staff path it
+     * permits backdated points and meter rollbacks (an edge agent flushing its
+     * offline buffer, or a swapped/reset meter — both real data that analytics
+     * scores downstream), but stays idempotent: an exact replay of the same
+     * cumulative value at the same instant is a no-op, while a differing value at
+     * an already-recorded instant is a conflict rather than silent overwrite.
+     */
+    @Transactional
+    public IngestOutcome ingest(UUID operatorId, UUID subscriberId, BigDecimal kwh, Instant readingAt) {
+        subscribers.lockByOperatorIdAndId(operatorId, subscriberId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Subscriber not found"));
+        Reading existing = readings.findFirstByOperatorIdAndSubscriberIdAndReadingAtLessThanEqualOrderByReadingAtDesc(
+                        operatorId, subscriberId, readingAt)
+                .map(ReadingEntity::toDomain)
+                .filter(reading -> reading.readingAt().equals(readingAt))
+                .orElse(null);
+        if (existing != null) {
+            if (existing.kwh().compareTo(kwh) == 0) {
+                return IngestOutcome.DUPLICATE;
+            }
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Conflicting reading already recorded at this time");
+        }
+        persist(operatorId, subscriberId, kwh, readingAt);
+        return IngestOutcome.RECORDED;
+    }
+
+    private Reading persist(UUID operatorId, UUID subscriberId, BigDecimal kwh, Instant readingAt) {
+        Reading reading = new Reading(UUID.randomUUID(), operatorId, subscriberId, kwh, readingAt);
         Reading saved = readings.save(new ReadingEntity(reading)).toDomain();
         outbox.enqueue("reading.recorded", operatorId, Map.of(
                 "readingId", saved.id(),
@@ -55,6 +86,11 @@ public class ReadingService {
                 "kwh", saved.kwh(),
                 "readingAt", saved.readingAt()));
         return saved;
+    }
+
+    public enum IngestOutcome {
+        RECORDED,
+        DUPLICATE
     }
 
     public List<Reading> list(UUID operatorId, UUID subscriberId) {

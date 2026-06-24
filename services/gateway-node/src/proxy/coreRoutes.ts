@@ -7,6 +7,7 @@ import { forward } from "./forward.js";
 import {
   billingRunBodySchema,
   createSubscriberBodySchema,
+  deviceMintBodySchema,
   outageBodySchema,
   pageQuerySchema,
   patchSubscriberBodySchema,
@@ -98,6 +99,16 @@ export function registerCoreRoutes(router: Router, config: Config): void {
 
   router.get("/outages", forwardToCore(config, "/outages"));
   router.post("/outages", admin, forwardToCore(config, "/outages", { bodySchema: outageBodySchema }));
+
+  // Device credentials for generator-site edge agents (the ingest path itself is
+  // public and registered separately).
+  router.post("/devices", admin, forwardToCore(config, "/devices", { bodySchema: deviceMintBodySchema }));
+  router.get("/devices", staff, forwardToCore(config, "/devices"));
+  router.post(
+    "/devices/:id/revoke",
+    admin,
+    forwardToCore(config, core("/devices/:id/revoke"), { paramSchema: uuidParamSchema }),
+  );
 }
 
 function forwardToCore(

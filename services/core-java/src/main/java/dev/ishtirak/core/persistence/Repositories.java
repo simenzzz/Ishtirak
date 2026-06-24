@@ -36,6 +36,7 @@ public interface Repositories {
 
     interface Subscribers extends JpaRepository<SubscriberEntity, UUID> {
         Optional<SubscriberEntity> findByOperatorIdAndId(UUID operatorId, UUID id);
+        Optional<SubscriberEntity> findByOperatorIdAndMeterId(UUID operatorId, String meterId);
         List<SubscriberEntity> findByOperatorId(UUID operatorId);
         List<SubscriberEntity> findByOperatorIdAndStatus(UUID operatorId, ResourceStatus status);
 
@@ -91,6 +92,12 @@ public interface Repositories {
         Optional<RefreshTokenEntity> lockByTokenHash(@Param("tokenHash") String tokenHash);
 
         List<RefreshTokenEntity> findByFamilyId(UUID familyId);
+    }
+
+    interface DeviceTokens extends JpaRepository<DeviceTokenEntity, UUID> {
+        Optional<DeviceTokenEntity> findByTokenHash(String tokenHash);
+        List<DeviceTokenEntity> findByOperatorIdOrderByCreatedAtDesc(UUID operatorId);
+        Optional<DeviceTokenEntity> findByOperatorIdAndId(UUID operatorId, UUID id);
     }
 
     interface OutboxEvents extends JpaRepository<OutboxEventEntity, UUID> {

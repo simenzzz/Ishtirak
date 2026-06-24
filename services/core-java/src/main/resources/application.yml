@@ -41,3 +41,4 @@ ishtirak:
     mutations-per-minute: 60
     readings-per-minute: 120
     billing-per-hour: 3
+    ingest-per-minute: 300

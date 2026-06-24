@@ -92,6 +92,36 @@ describe("forward", () => {
     expect(res.body).toEqual({ accessToken: "at" });
   });
 
+  it("forwards the client's own Authorization header without minting a service token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ recorded: 1 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = response();
+
+    await forward({
+      config,
+      target: "core-java",
+      baseUrl: config.CORE_JAVA_URL,
+      path: () => "/ingest/readings",
+      forwardClientAuthorization: true,
+    })(
+      {
+        method: "POST",
+        query: {},
+        params: {},
+        body: { readings: [] },
+        header: (name: string) =>
+          name.toLowerCase() === "authorization" ? "Bearer ishtdev_abc" : undefined,
+      } as any,
+      res as any,
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers.get("authorization")).toBe("Bearer ishtdev_abc");
+    expect(init.headers.get("x-operator-id")).toBeNull();
+    expect(init.headers.get("x-actor-role")).toBeNull();
+    expect(res.statusCode).toBe(200);
+  });
+
   it("returns validation errors before calling upstream", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

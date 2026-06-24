@@ -43,15 +43,28 @@ public class SubscriberService {
         if (tiers.findByOperatorIdAndId(operatorId, request.tierId()).isEmpty()) {
             throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Tier not found");
         }
+        String meterId = normalizeMeterId(request.meterId());
+        requireMeterIdUnique(operatorId, meterId);
         Subscriber subscriber = new Subscriber(
                 UUID.randomUUID(),
                 operatorId,
                 request.name(),
                 request.tierId(),
-                request.meterId(),
+                meterId,
                 ResourceStatus.ACTIVE,
                 clock.instant());
         return subscribers.save(new SubscriberEntity(subscriber)).toDomain();
+    }
+
+    /** Treat a blank meter id as "unassigned" so the partial-unique index stays NULL-only. */
+    private static String normalizeMeterId(String meterId) {
+        return meterId == null || meterId.isBlank() ? null : meterId.trim();
+    }
+
+    private void requireMeterIdUnique(UUID operatorId, String meterId) {
+        if (meterId != null && subscribers.findByOperatorIdAndMeterId(operatorId, meterId).isPresent()) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT", "Meter id already assigned to a subscriber");
+        }
     }
 
     @Transactional
