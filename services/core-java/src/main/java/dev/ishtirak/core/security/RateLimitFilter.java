@@ -5,7 +5,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,9 +57,33 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String subject(HttpServletRequest request) {
+        // The ingest path is device-authenticated and carries no operator header, so
+        // keying on the (gateway) source IP would collapse every device of every
+        // operator into one shared bucket. Key on the device credential instead so the
+        // limit is genuinely per-device and independent of the gateway's own limiter.
+        if ("/ingest/readings".equals(request.getRequestURI())) {
+            return deviceSubject(request);
+        }
         String operatorId = request.getHeader("X-Operator-Id");
         String actorRole = request.getHeader("X-Actor-Role");
         return operatorId == null ? request.getRemoteAddr() : operatorId + ":" + actorRole;
+    }
+
+    private static String deviceSubject(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return request.getRemoteAddr();
+        }
+        return "device:" + sha256(authorization.substring(7).trim());
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not hash device credential", ex);
+        }
     }
 
     private void pruneOldWindows(String limitName, long currentWindow) {

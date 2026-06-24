@@ -93,6 +93,12 @@ const bodyCases: ReadonlyArray<Case> = [
   },
   { op: "apiUpdateTier", zod: v.patchTierBodySchema, fixture: { perKwhRateUsd: 0.2 } },
   { op: "apiRecordReading", zod: v.recordReadingBodySchema, fixture: { subscriberId: UUID, kwh: 12.5, readingAt: ISO } },
+  {
+    op: "apiIngestReadings",
+    zod: v.ingestBatchBodySchema,
+    fixture: { readings: [{ meterId: "M-7", kwh: 12.5, readingAt: ISO }] },
+  },
+  { op: "apiMintDevice", zod: v.deviceMintBodySchema, fixture: { label: "Site A edge" } },
   { op: "apiRunBilling", zod: v.billingRunBodySchema, fixture: { periodStart: "2026-06-01", periodEnd: "2026-06-30" } },
   {
     op: "apiRecordPayment",

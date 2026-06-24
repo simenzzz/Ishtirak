@@ -73,7 +73,7 @@ export const ingestBatchBodySchema = z.object({
   readings: z
     .array(
       z.object({
-        meterId: z.string().min(1).max(128),
+        meterId: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/),
         kwh: z.number().min(0),
         readingAt: z.string().datetime(),
       }),

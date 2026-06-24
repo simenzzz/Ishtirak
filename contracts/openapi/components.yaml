@@ -31,6 +31,15 @@ components:
         Internal ports must not be reachable from the browser (servers are
         marked `x-internal`). Every internal query MUST filter by `X-Operator-Id`.
 
+    deviceToken:
+      type: http
+      scheme: bearer
+      description: >
+        **Device credential** for generator-site edge agents on the ingest path.
+        A long-lived, operator-scoped opaque token (issued via `/api/devices`,
+        prefix `ishtdev_`) that core-java authenticates directly — there is no
+        user identity. The gateway only forwards this `Authorization` header.
+
   parameters:
     pageParam:
       name: page
@@ -175,6 +184,30 @@ components:
           minimum: 0
           description: Cumulative meter value in kWh at readingAt.
         readingAt: { type: string, format: date-time }
+
+    DeviceToken:
+      type: object
+      additionalProperties: false
+      required: [id, label, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        status: { type: string, enum: [ACTIVE, REVOKED] }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+
+    MintedDeviceToken:
+      type: object
+      additionalProperties: false
+      required: [id, label, token, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        token:
+          type: string
+          description: One-time plaintext device secret (prefix `ishtdev_`); never returned again.
+        status: { type: string, enum: [ACTIVE, REVOKED] }
+        createdAt: { type: string, format: date-time }
 
     Invoice:
       type: object

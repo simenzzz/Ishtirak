@@ -304,6 +304,53 @@ deferred (see the unchecked items above) and do not gate v1.
 
 ---
 
+## Physical meter ingestion (hardware bundle) ⏳
+
+> Closes the gap between demo and product: today `reading.recorded` only fires
+> from manual staff entry. This track lets a per-subscriber WiFi breaker-meter
+> (Tasmota firmware) stream readings through a per-generator edge agent into the
+> system of record. See [`docs/HARDWARE.md`](./HARDWARE.md) for the BOM, Tasmota
+> runbook, and edge-agent deployment; design in the approved plan. Architecture:
+> **A now, extraction seam to B** — ingest lives in core-java, structured so it
+> can later move behind a standalone ingestion service without changing the
+> meter/edge contract.
+
+- [x] **Device identity** — `device_tokens` (operator-scoped, hashed; mint once
+  via `/devices`, authenticate, revoke). Admin mint/list/revoke endpoints.
+- [x] **`meterId` as a first-class key** — partial-unique index per operator +
+  app-level uniqueness on subscriber create; `findByOperatorIdAndMeterId`.
+- [x] **`POST /ingest/readings`** — public (device-token) batch endpoint in the
+  `readings/ingest` extraction-seam package; resolves `meterId` → subscriber,
+  records idempotently, returns a per-item verdict; rate-limited.
+- [x] **Device-trusted backfill** — `ReadingService.ingest` permits backdated
+  points and meter rollbacks (real device data) while staying idempotent on
+  exact replays; staff path unchanged.
+- [x] **Gateway proxy** — public `/api/ingest/readings` (per-device rate limit,
+  forwards the device `Authorization` header) + admin `/api/devices` routes.
+- [x] **Edge agent** (`services/edge-agent-python`) — Tasmota MQTT → SQLite
+  buffer → batched, idempotent upload with backoff; relay `cmnd/.../POWER`.
+- [x] **Contracts** — `/ingest/readings` + `/devices` in the gateway & core
+  OpenAPI specs; gateway request-drift cases added.
+- [ ] **Bench loop** — one real DDS238-2 + Pi + Mosquitto + edge agent proving
+  Tasmota telemetry → `reading.recorded` end-to-end (hardware, unverified).
+- [ ] **Meter provisioning/swap UX** — assign/replace a meter on an existing
+  subscriber (today `meterId` is set at create only).
+- [ ] **Remote disconnect surface** — operator-facing connect/disconnect with
+  admin gating + audit log (edge relay path exists; not yet exposed).
+- [ ] **Single-generator pilot** — 10–20 subscribers; validate offline-buffer
+  backfill and WiFi coverage. Then evaluate LoRa-RF concentrator for scale.
+- [ ] **Device-attribution audit** (security review MEDIUM-3) — thread the
+  `deviceTokenId` from authentication onto the reading row + `reading.recorded`
+  payload, so a compromised token's readings can be traced and quarantined.
+- [ ] **Bound the trusted backfill** (security review MEDIUM-2) — reject readings
+  backdated beyond a configurable horizon, cap implausible kWh deltas, and emit an
+  audit event on rollbacks so a leaked token can't silently rewrite history.
+- [ ] **Unknown-meter retention** (code review MEDIUM) — keep `UNKNOWN_METER`
+  readings buffered with a bounded TTL instead of dropping on 2xx, so a meter that
+  streams before its subscriber is provisioned isn't lost.
+- [ ] **Config-drive ingest limits** — gateway per-device limit and the Redis
+  fail-open policy for the ingest route should be configurable, not hardcoded.
+
 ## Post-v1 / operational track — Continuous learning (MLOps) ⏳
 
 > Realized **after** the v1 flows are live and accumulating real production

@@ -6,8 +6,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.ishtirak.core.domain.TariffPolicy;
+import dev.ishtirak.core.persistence.OperatorEntity;
+import dev.ishtirak.core.persistence.Repositories;
 import dev.ishtirak.core.support.CoreTestData;
 import dev.ishtirak.core.support.TestServiceTokens;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,12 +31,16 @@ class MeterIngestApiTest {
     private static final String SERVICE_SECRET = "dev-gateway-service-token-secret-32";
     private static final String METER = "M-7";
 
+    private static final UUID OTHER_OPERATOR = UUID.fromString("20000000-0000-0000-0000-000000000002");
+
     @Autowired
     private MockMvc mockMvc;
     @Autowired
     private ObjectMapper objectMapper;
     @Autowired
     private CoreTestData testData;
+    @Autowired
+    private Repositories.Operators operators;
 
     @BeforeEach
     void resetData() {
@@ -111,6 +119,21 @@ class MeterIngestApiTest {
     }
 
     @Test
+    void deviceTokenCannotWriteAnotherOperatorsMeter() throws Exception {
+        provisionSubscriber(METER); // M-7 belongs to operator A
+        operators.save(new OperatorEntity(
+                OTHER_OPERATOR, "Operator B", TariffPolicy.HYBRID, Instant.parse("2026-01-01T00:00:00Z")));
+        String otherToken = mintDeviceFor(OTHER_OPERATOR).token();
+
+        // Operator B's device resolves meter ids only within operator B, so A's M-7
+        // is invisible to it — no cross-tenant write, just an unknown meter.
+        JsonNode result = ingest(otherToken, batch(METER, "10", "2026-02-01T12:00:00Z"));
+        assertThat(result.get("recorded").asInt()).isZero();
+        assertThat(result.get("errors")).hasSize(1);
+        assertThat(result.get("errors").get(0).get("code").asText()).isEqualTo("UNKNOWN_METER");
+    }
+
+    @Test
     void duplicateMeterAssignmentIsRejected() throws Exception {
         provisionSubscriber(METER);
         mockMvc.perform(post("/subscribers")
@@ -147,8 +170,12 @@ class MeterIngestApiTest {
     }
 
     private Minted mintDevice() throws Exception {
+        return mintDeviceFor(OPERATOR_ID);
+    }
+
+    private Minted mintDeviceFor(UUID operatorId) throws Exception {
         MvcResult result = mockMvc.perform(post("/devices")
-                        .headers(headers("OPERATOR_ADMIN"))
+                        .headers(headersFor(operatorId, "OPERATOR_ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"label\":\"Site A edge\"}"))
                 .andExpect(status().isCreated())
@@ -179,9 +206,13 @@ class MeterIngestApiTest {
     }
 
     private HttpHeaders headers(String role) {
+        return headersFor(OPERATOR_ID, role);
+    }
+
+    private HttpHeaders headersFor(UUID operatorId, String role) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(TestServiceTokens.signed(OPERATOR_ID, role, null, SERVICE_SECRET));
-        headers.add("X-Operator-Id", OPERATOR_ID.toString());
+        headers.setBearerAuth(TestServiceTokens.signed(operatorId, role, null, SERVICE_SECRET));
+        headers.add("X-Operator-Id", operatorId.toString());
         headers.add("X-Actor-Role", role);
         return headers;
     }

@@ -466,6 +466,129 @@ paths:
         '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
         '404': { $ref: 'components.yaml#/components/responses/NotFound' }
 
+  /ingest/readings:
+    post:
+      tags: [ingest]
+      operationId: ingestReadings
+      summary: Ingest a batch of device-sourced meter readings
+      description: >
+        Public to the internal identity interceptor (like `/auth/*`): the
+        credential is a device token in the `Authorization` header that this
+        service authenticates itself, so there is no operator/role header.
+        Resolves each `meterId` to a subscriber and records idempotently,
+        emitting `reading.recorded` per accepted reading. The trusted device path
+        permits backdated backfill and meter rollbacks.
+      x-status: built
+      x-emits-event: reading.recorded
+      security:
+        - deviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [readings]
+              properties:
+                readings:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [meterId, kwh, readingAt]
+                    properties:
+                      meterId: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+                      kwh: { type: number, minimum: 0 }
+                      readingAt: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Per-batch ingest verdict.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recorded, duplicates, errors]
+                properties:
+                  recorded: { type: integer, minimum: 0 }
+                  duplicates: { type: integer, minimum: 0 }
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        meterId: { type: string }
+                        readingAt: { type: string, format: date-time }
+                        code: { type: string }
+                        message: { type: string }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+
+  /devices:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/operatorIdHeader'
+      - $ref: 'components.yaml#/components/parameters/actorRoleHeader'
+    get:
+      tags: [devices]
+      operationId: listDevices
+      summary: List device tokens for the operator
+      x-status: built
+      responses:
+        '200':
+          description: Device tokens (secret omitted).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'components.yaml#/components/schemas/DeviceToken' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+    post:
+      tags: [devices]
+      operationId: mintDevice
+      summary: Mint a device token (returns the one-time secret)
+      x-status: built
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [label]
+              properties:
+                label: { type: string, minLength: 1, maxLength: 120 }
+      responses:
+        '201':
+          description: Minted device token, including the one-time secret.
+          content:
+            application/json:
+              schema: { $ref: 'components.yaml#/components/schemas/MintedDeviceToken' }
+        '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+
+  /devices/{id}/revoke:
+    parameters:
+      - $ref: 'components.yaml#/components/parameters/operatorIdHeader'
+      - $ref: 'components.yaml#/components/parameters/actorRoleHeader'
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [devices]
+      operationId: revokeDevice
+      summary: Revoke a device token
+      x-status: built
+      responses:
+        '204': { description: Revoked. }
+        '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: 'components.yaml#/components/responses/Forbidden' }
+        '404': { $ref: 'components.yaml#/components/responses/NotFound' }
+
   /billing-runs:
     parameters:
       - $ref: 'components.yaml#/components/parameters/operatorIdHeader'

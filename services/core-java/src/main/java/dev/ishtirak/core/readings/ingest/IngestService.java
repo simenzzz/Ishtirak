@@ -38,6 +38,13 @@ public class IngestService {
         this.readingService = readingService;
     }
 
+    /**
+     * NOTE: this method must NOT be {@code @Transactional}. Each item runs in its
+     * own {@link ReadingService#ingest} transaction so a single item's
+     * {@code CONFLICT}/{@code UNKNOWN_METER} rollback cannot poison the batch.
+     * Annotating this method transactional would make one item's exception mark
+     * the whole batch rollback-only while still reporting a non-zero recorded count.
+     */
     public IngestResult ingest(String deviceToken, List<IngestReadingItem> items) {
         UUID operatorId = deviceTokenService.authenticate(deviceToken);
         int recorded = 0;

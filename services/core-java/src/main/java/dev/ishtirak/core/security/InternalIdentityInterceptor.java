@@ -52,11 +52,14 @@ public class InternalIdentityInterceptor implements HandlerInterceptor {
     }
 
     private static boolean isPublic(String uri) {
+        // Pin the device-authenticated ingest route to its exact path: a broad
+        // "/ingest/" prefix would silently expose any future /ingest/* controller
+        // that forgot to self-authenticate.
         return uri.equals("/health")
                 || uri.equals("/ready")
                 || uri.startsWith("/actuator")
                 || uri.startsWith("/auth/")
-                || uri.startsWith("/ingest/");
+                || uri.equals("/ingest/readings");
     }
 
     private static boolean missingBearer(String authorization) {
