@@ -27,10 +27,13 @@ JSON Schema (draft 2020-12). Every event shares a common envelope:
 ## REST APIs (`openapi/`)
 
 Each service owns an **OpenAPI 3.1** spec describing the routes the gateway
-calls; the gateway re-exposes a curated subset to the web client. These are
-hand-authored **design contracts ahead of implementation** — only `/health` and
-`/ready` are built today; every other operation carries `x-status: planned`
-(vs. `x-status: built`). The human-readable companion is
+calls; the gateway re-exposes a curated subset to the web client. The operations
+are **implemented** — every one carries `x-status: built` (the `x-status: planned`
+marker remains reserved for future, not-yet-built routes). Note the specs are
+**not** loaded into runtime request validation: each service mirrors them with
+hand-written validators (gateway-node uses Zod in `src/proxy/validation.ts`); the
+`contracts/*.contract.test.ts` / `test_consumer_contract.py` suites guard against
+drift between those validators and the specs. The human-readable companion is
 [`docs/API.md`](../docs/API.md).
 
 | Spec | Service | Surface |

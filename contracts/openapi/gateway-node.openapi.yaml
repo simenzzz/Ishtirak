@@ -14,8 +14,9 @@ info:
     in OpenAPI; its protocol lives in ../asyncapi.yaml and ../../docs/API.md.
 
 
-    **Design-ahead-of-implementation:** only `/health` and `/ready` are built
-    today (`x-status: built`); everything else is `x-status: built`.
+    **Status:** every operation is implemented (`x-status: built`). The spec is
+    not loaded into runtime validation — the gateway mirrors it with hand-written
+    Zod schemas, kept aligned by the request-contract drift tests.
   contact: { name: Ishtirak, url: https://ishtirak.dev }
 servers:
   - url: http://localhost:8080

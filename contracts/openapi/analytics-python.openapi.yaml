@@ -18,8 +18,7 @@ info:
     `X-Operator-Id` and reject SUBSCRIBER role.
 
 
-    **Design-ahead-of-implementation:** only `/health` and `/ready` are built
-    today (`x-status: built`); everything else is `x-status: built`.
+    **Status:** every operation is implemented (`x-status: built`).
     Companion: ../../docs/API.md.
   contact: { name: Ishtirak, url: https://ishtirak.dev }
 servers:

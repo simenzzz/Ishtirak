@@ -19,6 +19,14 @@
   specs (and the WebSocket messages against [`contracts/asyncapi.yaml`](../contracts/asyncapi.yaml)),
   so producers and consumers can't drift from the source of truth. CI lints the
   specs themselves (the `contracts` job).
+  - _Done:_ producer-side event validation loads the schemas at runtime
+    (core-java `EventContractValidator`, analytics `publisher/schema.py`);
+    **consumer-side** drift tests cross-check the hand-written validators against
+    the contracts — analytics Pydantic (`tests/consumer/test_consumer_contract.py`),
+    gateway event Zod (`src/events/envelope.contract.test.ts`), and gateway REST
+    request Zod vs OpenAPI (`src/proxy/validation.contract.test.ts`).
+  - _To do:_ REST **response**-shape drift checks and WebSocket-message
+    (AsyncAPI) drift checks.
 - **Mandatory reviews**: run `everything-claude-code:code-reviewer` after any
   logic change; add `everything-claude-code:security-reviewer` for auth, RBAC,
   multi-tenant isolation, payments, user input, or event/WebSocket surface. Fix
