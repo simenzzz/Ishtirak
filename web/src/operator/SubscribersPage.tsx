@@ -3,9 +3,13 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/useAuth";
 import { DataState } from "../components/DataState";
+import { Badge } from "../components/ui/Badge";
+import { DataTable } from "../components/ui/DataTable";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { usePaginated } from "../hooks/usePaginated";
 import { apiRequest } from "../lib/apiClient";
+import { subscriberStatusView } from "../lib/statusTone";
 import type { Subscriber, Tier } from "../lib/types";
 
 export function SubscribersPage() {
@@ -16,27 +20,27 @@ export function SubscribersPage() {
 
   return (
     <section className="page-stack">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Customer ledger</p>
-          <h2>Subscribers</h2>
-        </div>
-      </header>
+      <PageHeader eyebrow="Customer ledger" title="Subscribers" />
       {isAdmin ? <CreateSubscriberForm tiers={tiers.data ?? []} onDone={subscribers.refetch} /> : null}
       <DataState loading={subscribers.loading} error={subscribers.error}>
-        <table>
-          <thead><tr><th>Name</th><th>Meter</th><th>Status</th><th /></tr></thead>
-          <tbody>
-            {subscribers.data.map((subscriber) => (
-              <tr key={subscriber.id}>
-                <td>{subscriber.name}</td>
-                <td>{subscriber.meterId ?? "Unassigned"}</td>
-                <td>{subscriber.status}</td>
-                <td><Link to={`/operator/subscribers/${subscriber.id}`}>Open</Link></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable>
+          <table>
+            <thead><tr><th>Name</th><th>Meter</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {subscribers.data.map((subscriber) => {
+                const view = subscriberStatusView(subscriber.status);
+                return (
+                  <tr key={subscriber.id}>
+                    <td>{subscriber.name}</td>
+                    <td className="tnum">{subscriber.meterId ?? "Unassigned"}</td>
+                    <td><Badge tone={view.tone}>{view.label}</Badge></td>
+                    <td><Link to={`/operator/subscribers/${subscriber.id}`}>Open</Link></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </DataTable>
       </DataState>
     </section>
   );

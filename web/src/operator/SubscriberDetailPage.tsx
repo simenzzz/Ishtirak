@@ -3,10 +3,14 @@ import { useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/useAuth";
 import { DataState } from "../components/DataState";
+import { Badge } from "../components/ui/Badge";
+import { DataTable } from "../components/ui/DataTable";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { usePaginated } from "../hooks/usePaginated";
 import { apiRequest } from "../lib/apiClient";
 import { formatDateTime } from "../lib/format";
+import { subscriberStatusView } from "../lib/statusTone";
 import type { Reading, Subscriber } from "../lib/types";
 
 export function SubscriberDetailPage() {
@@ -15,29 +19,30 @@ export function SubscriberDetailPage() {
   const subscriber = useFetch<Subscriber>(id ? `/subscribers/${id}` : null);
   const readings = usePaginated<Reading>(`/subscribers/${id ?? "missing"}/readings`);
   const isAdmin = identity?.role === "OPERATOR_ADMIN";
+  const statusView = subscriberStatusView(subscriber.data?.status);
 
   return (
     <section className="page-stack">
       <DataState loading={subscriber.loading} error={subscriber.error}>
-        <header className="page-header">
-          <div>
-            <p className="eyebrow">Subscriber</p>
-            <h2>{subscriber.data?.name}</h2>
-          </div>
-          <span className="badge">{subscriber.data?.status}</span>
-        </header>
+        <PageHeader
+          eyebrow="Subscriber"
+          title={subscriber.data?.name}
+          actions={<Badge tone={statusView.tone}>{statusView.label}</Badge>}
+        />
         {isAdmin && subscriber.data ? <PatchSubscriberForm subscriber={subscriber.data} onDone={subscriber.refetch} /> : null}
       </DataState>
       <RecordReadingForm subscriberId={id ?? ""} onDone={readings.refetch} />
       <DataState loading={readings.loading} error={readings.error}>
-        <table>
-          <thead><tr><th>Reading time</th><th>kWh</th></tr></thead>
-          <tbody>
-            {readings.data.map((reading) => (
-              <tr key={reading.id}><td>{formatDateTime(reading.readingAt)}</td><td>{reading.kwh}</td></tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable>
+          <table>
+            <thead><tr><th>Reading time</th><th>kWh</th></tr></thead>
+            <tbody>
+              {readings.data.map((reading) => (
+                <tr key={reading.id}><td>{formatDateTime(reading.readingAt)}</td><td className="tnum">{reading.kwh}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       </DataState>
     </section>
   );

@@ -1,0 +1,168 @@
+/* Data tables, status badges, and live indicators. */
+.data-table {
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table table {
+  border: none;
+  background: transparent;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  padding: 11px 16px;
+  background: var(--surface-sunk);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+tbody td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 0.9rem;
+  vertical-align: top;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover td {
+  background: rgb(30 74 63 / 4%);
+}
+
+td a {
+  color: var(--green);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+td a:hover {
+  text-decoration: underline;
+}
+
+/* Status badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge--ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: transparent;
+}
+
+.badge--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: transparent;
+}
+
+.badge--danger {
+  background: var(--alert-soft);
+  color: var(--alert);
+  border-color: transparent;
+}
+
+.badge--brass {
+  background: var(--brass-soft);
+  color: var(--brass-ink);
+  border-color: transparent;
+}
+
+/* Live indicator */
+.live-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+.live-dot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: live-pulse 2s infinite;
+}
+
+.live-dot--off::before {
+  background: var(--brass);
+  animation: none;
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(30 107 67 / 45%);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgb(30 107 67 / 0%);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(30 107 67 / 0%);
+  }
+}
+
+/* Live tampering strip */
+.live-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--alert);
+}
+
+.live-strip > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--alert);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.live-strip > span {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,99 @@
+/* Portal nav pills and the login / context-selection screens. */
+.portal-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.portal-nav a svg {
+  width: 16px;
+  height: 16px;
+}
+
+.portal-nav a:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+.portal-nav a.active {
+  background: var(--green);
+  color: #fff;
+}
+
+/* Auth screens */
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgb(30 74 63 / 22%) 0%, transparent 55%),
+    radial-gradient(120% 90% at 100% 100%, rgb(194 135 59 / 20%) 0%, transparent 45%),
+    var(--bg);
+}
+
+.login-panel {
+  width: min(440px, calc(100vw - 32px));
+  padding: var(--space-6);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-panel h1 {
+  font-size: 1.875rem;
+}
+
+.login-panel .form-stack {
+  margin-top: var(--space-5);
+}
+
+.muted-link {
+  display: inline-block;
+  margin-top: var(--space-4);
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.muted-link:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+
+/* Context selection */
+.choice-list {
+  display: grid;
+  gap: 10px;
+  margin: var(--space-5) 0 var(--space-4);
+}
+
+.choice-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.choice-card:has(input:checked) {
+  border-color: var(--brass);
+  box-shadow: var(--focus-ring);
+}
+
+.choice-card span {
+  display: grid;
+  gap: 2px;
+}
+
+.choice-card strong {
+  font-size: 0.95rem;
+}
+
+.choice-card small {
+  color: var(--ink-muted);
+}

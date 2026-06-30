@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
+import { Button } from "../components/ui/Button";
 import { homeFor } from "./RequireRole";
 import { useAuth } from "./useAuth";
 import type { Membership } from "../lib/types";
@@ -60,7 +61,7 @@ export function ContextSelectPage() {
           ))}
         </div>
         {error ? <p className="error">{error}</p> : null}
-        <button onClick={() => void submit()}>Continue</button>
+        <Button block onClick={() => void submit()}>Continue</Button>
       </section>
     </main>
   );

@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 
 import { useAuth } from "../auth/useAuth";
 import { DataState } from "../components/DataState";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { apiRequest } from "../lib/apiClient";
 import { formatDateTime } from "../lib/format";
@@ -12,7 +13,7 @@ export function OutagesPage() {
   const outages = useFetch<readonly Outage[]>("/outages");
   return (
     <section className="page-stack">
-      <header className="page-header"><div><p className="eyebrow">Load shedding</p><h2>Outages</h2></div></header>
+      <PageHeader eyebrow="Load shedding" title="Outages" />
       {identity?.role === "OPERATOR_ADMIN" ? <ScheduleOutageForm onDone={outages.refetch} /> : null}
       <DataState loading={outages.loading} error={outages.error}>
         <div className="card-grid">

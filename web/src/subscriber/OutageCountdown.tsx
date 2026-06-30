@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { DataState } from "../components/DataState";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useCountdown, type CountdownSeed } from "../hooks/useCountdown";
 import { useFetch } from "../hooks/useFetch";
 import { formatDateTime, secondsToClock } from "../lib/format";
@@ -28,7 +29,7 @@ export function OutageCountdown() {
 
   return (
     <section className="page-stack">
-      <header className="page-header"><div><p className="eyebrow">Live outage</p><h2>Countdown</h2></div></header>
+      <PageHeader eyebrow="Live outage" title="Countdown" />
       <DataState loading={outages.loading} error={outages.error}>
         {seed ? (
           <article className="countdown-panel" data-testid="outage-countdown">

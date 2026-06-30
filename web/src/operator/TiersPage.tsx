@@ -1,7 +1,9 @@
+import { Zap } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 import { useAuth } from "../auth/useAuth";
 import { DataState } from "../components/DataState";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { apiRequest } from "../lib/apiClient";
 import { formatDual } from "../lib/format";
@@ -13,14 +15,17 @@ export function TiersPage() {
   const isAdmin = identity?.role === "OPERATOR_ADMIN";
   return (
     <section className="page-stack">
-      <header className="page-header"><div><p className="eyebrow">Tariff book</p><h2>Tiers</h2></div></header>
+      <PageHeader eyebrow="Tariff book" title="Tiers" />
       {isAdmin ? <TierForm onDone={tiers.refetch} /> : null}
       <DataState loading={tiers.loading} error={tiers.error}>
         <div className="card-grid">
           {(tiers.data ?? []).map((tier) => (
             <article className="metric-card" key={tier.id}>
-              <strong>{tier.name}</strong>
-              <span>{tier.amperage}A · {tier.effectiveTariffPolicy}</span>
+              <div className="tier-card__head">
+                <strong>{tier.name}</strong>
+                <span className="amp-chip"><Zap aria-hidden />{tier.amperage} A</span>
+              </div>
+              <span className="muted">{tier.effectiveTariffPolicy}</span>
               <small>Standing {formatDual(tier.standingFeeUsd, tier.standingFeeLbp)}</small>
               <small>Per kWh {formatDual(tier.perKwhRateUsd, tier.perKwhRateLbp)}</small>
             </article>

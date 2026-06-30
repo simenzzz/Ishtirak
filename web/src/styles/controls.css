@@ -1,0 +1,76 @@
+/* Eyebrow, buttons, and form controls. */
+
+/* Eyebrow — technical mono label above headings. */
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--brass);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Buttons — variants layer over the base button. */
+.btn--ghost {
+  background: transparent;
+  color: var(--green);
+  border-color: var(--hairline-strong);
+}
+
+.btn--ghost:hover {
+  background: var(--green-tint);
+  border-color: var(--green);
+}
+
+.btn--danger {
+  background: var(--alert);
+}
+
+.btn--danger:hover {
+  background: var(--alert-deep);
+}
+
+.btn--block {
+  width: 100%;
+}
+
+/* Forms */
+.form-stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.form-stack label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+}
+
+.error {
+  color: var(--alert);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.success {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.status-line {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}

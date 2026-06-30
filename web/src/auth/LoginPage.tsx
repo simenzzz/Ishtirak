@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { Button } from "../components/ui/Button";
 import { homeFor } from "./RequireRole";
 import { useAuth } from "./useAuth";
 
@@ -64,7 +65,9 @@ export function LoginPage() {
             <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
           </label>
           {error ? <p className="error">{error}</p> : null}
-          <button disabled={busy}>{busy ? "Signing in..." : "Sign in"}</button>
+          <Button type="submit" block disabled={busy}>
+            {busy ? "Signing in..." : "Sign in"}
+          </Button>
         </form>
         <Link to="/portal" className="muted-link">Subscriber portal</Link>
       </section>

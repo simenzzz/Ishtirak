@@ -1,21 +1,14 @@
 import { useEffect } from "react";
 
 import { DataState } from "../components/DataState";
+import { PageHeader } from "../components/ui/PageHeader";
 import { usePaginated } from "../hooks/usePaginated";
 import { formatDate, formatDual } from "../lib/format";
-import type { Invoice, InvoiceStatus, WsEvent } from "../lib/types";
-
-const STATUS_LABEL: Record<InvoiceStatus, string> = {
-  ISSUED: "Issued",
-  PARTIAL: "Partially paid",
-  PAID: "Paid",
-  VOID: "Voided",
-  NEEDS_REVIEW: "Under review",
-};
+import { invoiceStatusView } from "../lib/statusTone";
+import type { Invoice, WsEvent } from "../lib/types";
 
 function headline(invoice: Invoice) {
-  if (invoice.status === "NEEDS_REVIEW") return "Under review";
-  if (invoice.status === "VOID") return "Voided";
+  if (invoice.status === "NEEDS_REVIEW" || invoice.status === "VOID") return invoiceStatusView(invoice.status).label;
   return formatDual(invoice.amountUsd, invoice.amountLbp);
 }
 
@@ -35,20 +28,20 @@ export function CurrentBillPage() {
 
   return (
     <section className="page-stack">
-      <header className="page-header"><div><p className="eyebrow">Current bill</p><h2>Latest invoice</h2></div></header>
+      <PageHeader eyebrow="Current bill" title="Latest invoice" />
       <DataState loading={invoices.loading} error={invoices.error}>
         {current ? (
           <article className="bill-panel" data-testid="current-bill">
             <strong>{headline(current)}</strong>
             <span>{formatDate(current.periodStart)} - {formatDate(current.periodEnd)}</span>
-            <small>{current.kwhConsumed} kWh · {STATUS_LABEL[current.status]}</small>
+            <small>{current.kwhConsumed} kWh · {invoiceStatusView(current.status).label}</small>
           </article>
         ) : <p className="status-line">No invoices yet.</p>}
         <div className="card-grid">
           {invoices.data.slice(1).map((invoice) => (
             <article className="metric-card" key={invoice.id}>
               <strong>{headline(invoice)}</strong>
-              <span>{STATUS_LABEL[invoice.status]}</span>
+              <span>{invoiceStatusView(invoice.status).label}</span>
             </article>
           ))}
         </div>

@@ -1,4 +1,6 @@
 import { DataState } from "../components/DataState";
+import { DataTable } from "../components/ui/DataTable";
+import { PageHeader } from "../components/ui/PageHeader";
 import { usePaginated } from "../hooks/usePaginated";
 import { formatDateTime } from "../lib/format";
 import type { Reading } from "../lib/types";
@@ -7,14 +9,16 @@ export function ConsumptionHistoryPage() {
   const readings = usePaginated<Reading>("/me/readings");
   return (
     <section className="page-stack">
-      <header className="page-header"><div><p className="eyebrow">Meter history</p><h2>Consumption</h2></div></header>
+      <PageHeader eyebrow="Meter history" title="Consumption" />
       <DataState loading={readings.loading} error={readings.error}>
-        <table>
-          <thead><tr><th>Reading</th><th>kWh</th></tr></thead>
-          <tbody>{readings.data.map((reading) => (
-            <tr key={reading.id}><td>{formatDateTime(reading.readingAt)}</td><td>{reading.kwh}</td></tr>
-          ))}</tbody>
-        </table>
+        <DataTable>
+          <table>
+            <thead><tr><th>Reading</th><th>kWh</th></tr></thead>
+            <tbody>{readings.data.map((reading) => (
+              <tr key={reading.id}><td>{formatDateTime(reading.readingAt)}</td><td className="tnum">{reading.kwh}</td></tr>
+            ))}</tbody>
+          </table>
+        </DataTable>
       </DataState>
     </section>
   );

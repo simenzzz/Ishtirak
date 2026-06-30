@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 
 import { useAuth } from "../auth/useAuth";
+import { PageHeader } from "../components/ui/PageHeader";
 import { apiRequest } from "../lib/apiClient";
 
 type BillingRunResult = Readonly<{ issuedCount?: number; invoiceCount?: number; needsReviewCount?: number }>;
@@ -34,7 +35,7 @@ export function BillingRunPage() {
 
   return (
     <section className="page-stack">
-      <header className="page-header"><div><p className="eyebrow">Month close</p><h2>Billing run</h2></div></header>
+      <PageHeader eyebrow="Month close" title="Billing run" />
       {isAdmin ? (
         <form className="inline-form" onSubmit={submit}>
           <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />

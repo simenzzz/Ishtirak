@@ -1,6 +1,9 @@
+import { Activity, LogOut, Power, Receipt } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { useAuth } from "../auth/useAuth";
+import { Button } from "../components/ui/Button";
+import { LiveDot } from "../components/ui/LiveDot";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { WsEvent } from "../lib/types";
 
@@ -12,15 +15,30 @@ export function SubscriberPortal() {
   return (
     <main className="portal-shell">
       <header className="portal-header">
-        <div><p className="eyebrow">Subscriber</p><h1>Ishtirak portal</h1></div>
-        <nav>
-          <NavLink to="/portal/bill">Bill</NavLink>
-          <NavLink to="/portal/consumption">Consumption</NavLink>
-          <NavLink to="/portal/outage">Outage</NavLink>
+        <div className="brand">
+          <p className="eyebrow">Subscriber</p>
+          <h1>Ishtirak portal</h1>
+        </div>
+        <nav className="portal-nav">
+          <NavLink to="/portal/bill">
+            <Receipt aria-hidden />
+            Bill
+          </NavLink>
+          <NavLink to="/portal/consumption">
+            <Activity aria-hidden />
+            Consumption
+          </NavLink>
+          <NavLink to="/portal/outage">
+            <Power aria-hidden />
+            Outage
+          </NavLink>
         </nav>
-        <button onClick={logout}>Sign out</button>
+        <Button variant="ghost" onClick={logout}>
+          <LogOut size={16} aria-hidden />
+          Sign out
+        </Button>
       </header>
-      <p className="status-line">{connected ? "Live updates connected" : "Reconnecting live updates"}</p>
+      <LiveDot on={connected}>{connected ? "Live updates connected" : "Reconnecting live updates"}</LiveDot>
       <Outlet />
     </main>
   );

@@ -1,0 +1,64 @@
+/* Refined Levant — design tokens.
+   Single light theme; structured so a dark theme could be layered later. */
+:root {
+  /* Surfaces & ink (warm sand) */
+  --bg: #f3eee3;
+  --surface: #fbf8f1;
+  --surface-sunk: #efe9db;
+  --hairline: #e0d8c6;
+  --hairline-strong: #d2c8b0;
+  --ink: #20251f;
+  --ink-muted: #6b6557;
+
+  /* Brand: generator-green + brass signature */
+  --green: #1e4a3f;
+  --green-deep: #163a31;
+  --green-tint: #e8efea;
+  --brass: #c2873b;
+  --brass-ink: #8a5a18;
+  --brass-soft: #f1e2c4;
+  --brass-line: #e4cf9e;
+
+  /* Status tones */
+  --ok: #1e6b43;
+  --ok-soft: #dcebdf;
+  --warn: #9a6b16;
+  --warn-soft: #f0e4c8;
+  --alert: #b23a28;
+  --alert-deep: #97301f;
+  --alert-soft: #f3dbd4;
+
+  /* Dark sidebar chrome */
+  --sidebar-bg: #163a31;
+  --sidebar-edge: #102b24;
+  --sidebar-ink: #e8e4d6;
+  --sidebar-ink-muted: #9db0a6;
+
+  /* Typography */
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Warm elevation */
+  --shadow-sm: 0 1px 2px rgb(32 37 31 / 6%), 0 1px 1px rgb(32 37 31 / 4%);
+  --shadow-md: 0 6px 16px rgb(32 37 31 / 9%);
+  --shadow-lg: 0 24px 60px rgb(32 37 31 / 16%);
+
+  /* Brass focus ring */
+  --focus-ring: 0 0 0 3px rgb(194 135 59 / 35%);
+}
