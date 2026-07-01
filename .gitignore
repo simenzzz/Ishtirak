@@ -1,6 +1,5 @@
 # Java
 services/core-java/target/
-services/core-java/.mvn/
 *.class
 
 # Node / TypeScript

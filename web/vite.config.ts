@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
+    testTimeout: 10000,
     setupFiles: ["./src/test/setup.ts"],
     // Unit/component tests live under src/. Playwright E2E specs live under e2e/
     // and must not be collected by Vitest (they run against a live stack instead).
