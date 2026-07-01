@@ -8,8 +8,11 @@ type BillingRunResult = Readonly<{ issuedCount?: number; invoiceCount?: number; 
 
 export function BillingRunPage() {
   const { identity } = useAuth();
-  const [periodStart, setPeriodStart] = useState(new Date().toISOString().slice(0, 8) + "01");
-  const [periodEnd, setPeriodEnd] = useState(new Date().toISOString().slice(0, 10));
+  const now = new Date();
+  const [periodStart, setPeriodStart] = useState(now.toISOString().slice(0, 8) + "01");
+  const [periodEnd, setPeriodEnd] = useState(
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10),
+  );
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
   const isAdmin = identity?.role === "OPERATOR_ADMIN";
