@@ -7,6 +7,7 @@ import { WebSocketServer, type RawData } from "ws";
 import { type Identity } from "../auth/identity.js";
 import { verifyAccessToken } from "../auth/jwtVerify.js";
 import { type Config } from "../config.js";
+import { logger } from "../logger.js";
 import { canSubscribe, type Channel } from "./channels.js";
 import { parseInbound, pong, unauthorized } from "./messages.js";
 import {
@@ -40,18 +41,22 @@ export function attachWsServer(server: Server, config: Config): GatewayWsServer 
     const protocol = extractProtocol(req.headers["sec-websocket-protocol"]);
     const token = protocol?.startsWith("bearer.") ? protocol.slice("bearer.".length) : null;
     if (!token || !hasProtocol(req.headers["sec-websocket-protocol"], acceptedProtocol)) {
+      logger.debug({ hasToken: !!token }, "ws upgrade rejected: missing or unrecognized subprotocol");
       socket.destroy();
       return;
     }
+    let identity: Identity;
     try {
-      const identity = verifyAccessToken(token, config);
-      identities.set(req, identity);
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit("connection", ws, req);
-      });
-    } catch {
+      identity = verifyAccessToken(token, config);
+    } catch (err) {
+      logger.debug({ err }, "ws upgrade rejected: access token verification failed");
       socket.destroy();
+      return;
     }
+    identities.set(req, identity);
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
   });
 
   wss.on("connection", (socket, req) => {

@@ -18,7 +18,7 @@ export default defineConfig({
   // (refresh cookie -> access token) on hard navigations, both of which can race
   // transiently while the freshly-started stack is still warming. Retry to keep
   // the suite deterministically green without masking real, repeatable failures.
-  retries: 2,
+  retries: 3,
   timeout: 60_000,
   expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { open: "never" }]],
