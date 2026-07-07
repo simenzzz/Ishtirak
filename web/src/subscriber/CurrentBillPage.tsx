@@ -13,7 +13,7 @@ function headline(invoice: Invoice) {
 }
 
 export function CurrentBillPage() {
-  const invoices = usePaginated<Invoice>("/me/invoices", 5);
+  const invoices = usePaginated<Invoice>("/me/invoices", { limit: 5 });
   const current = invoices.data[0];
   const { refetch } = invoices;
 

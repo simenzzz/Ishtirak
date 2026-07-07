@@ -635,12 +635,15 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [issuedCount, needsReviewCount, periodStart, periodEnd]
+                required: [issuedCount, needsReviewCount, periodStart, periodEnd, invoices]
                 properties:
                   issuedCount: { type: integer, minimum: 0 }
                   needsReviewCount: { type: integer, minimum: 0 }
                   periodStart: { type: string, format: date }
                   periodEnd: { type: string, format: date }
+                  invoices:
+                    type: array
+                    items: { $ref: 'components.yaml#/components/schemas/IssuedInvoiceSummary' }
         '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
         '403': { $ref: 'components.yaml#/components/responses/Forbidden' }

@@ -224,6 +224,17 @@ components:
         status: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID, NEEDS_REVIEW] }
         issuedAt: { type: string, format: date-time }
 
+    IssuedInvoiceSummary:
+      type: object
+      additionalProperties: false
+      required: [id, subscriberId, subscriberName, amountUsd, amountLbp]
+      properties:
+        id: { type: string, format: uuid }
+        subscriberId: { type: string, format: uuid }
+        subscriberName: { type: string }
+        amountUsd: { type: number, minimum: 0 }
+        amountLbp: { type: integer, minimum: 0 }
+
     Payment:
       type: object
       additionalProperties: false

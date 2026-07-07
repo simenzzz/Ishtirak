@@ -67,6 +67,14 @@ export type Invoice = Readonly<{
   issuedAt?: string;
 }>;
 
+export type BillingRunInvoice = Readonly<{
+  id: string;
+  subscriberId: string;
+  subscriberName: string;
+  amountUsd: number;
+  amountLbp: number;
+}>;
+
 export type Payment = Readonly<{
   id: string;
   invoiceId: string;

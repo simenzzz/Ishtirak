@@ -20,7 +20,8 @@ import { SubscriberPortal } from "./subscriber/SubscriberPortal";
 export function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login" element={<LoginPage key="operator" audience="operator" />} />
+      <Route path="/portal/login" element={<LoginPage key="subscriber" audience="subscriber" />} />
       <Route path="/select-context" element={<ContextSelectPage />} />
       <Route element={<RequireRole roles={["OPERATOR_ADMIN", "OPERATOR_STAFF"]} />}>
         <Route path="/operator" element={<OperatorDashboard />}>

@@ -5,7 +5,36 @@ import { Button } from "../components/ui/Button";
 import { homeFor } from "./RequireRole";
 import { useAuth } from "./useAuth";
 
+type Audience = "operator" | "subscriber";
+
 type LocationState = Readonly<{ from?: string }>;
+
+type AudienceConfig = Readonly<{
+  eyebrow: string;
+  title: string;
+  defaultDevEmail: string;
+  crossLinkTo: string;
+  crossLinkLabel: string;
+}>;
+
+// Immutable per-audience chrome. One component, two themed surfaces sharing
+// the same backend /auth/login — no duplicated submit logic.
+const AUDIENCE: Readonly<Record<Audience, AudienceConfig>> = {
+  operator: {
+    eyebrow: "Ishtirak v1",
+    title: "Generator operations console",
+    defaultDevEmail: "admin@ishtirak.local",
+    crossLinkTo: "/portal/login",
+    crossLinkLabel: "Subscriber portal",
+  },
+  subscriber: {
+    eyebrow: "Subscriber",
+    title: "Ishtirak portal",
+    defaultDevEmail: "",
+    crossLinkTo: "/login",
+    crossLinkLabel: "Operator console",
+  },
+};
 
 // Only treat an in-app, single-slash path as a safe post-login redirect target;
 // reject protocol-relative (`//host`) or backslash forms.
@@ -14,12 +43,13 @@ function safeReturnPath(from: string | undefined): string | null {
   return from;
 }
 
-export function LoginPage() {
+export function LoginPage({ audience = "operator" }: { readonly audience?: Audience }) {
+  const config = AUDIENCE[audience];
   const { identity, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = safeReturnPath((location.state as LocationState | null)?.from);
-  const [email, setEmail] = useState(import.meta.env.DEV ? "admin@ishtirak.local" : "");
+  const [email, setEmail] = useState(import.meta.env.DEV ? config.defaultDevEmail : "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,8 +83,8 @@ export function LoginPage() {
   return (
     <main className="login-screen">
       <section className="login-panel">
-        <p className="eyebrow">Ishtirak v1</p>
-        <h1>Generator operations console</h1>
+        <p className="eyebrow">{config.eyebrow}</p>
+        <h1>{config.title}</h1>
         <form onSubmit={submit} className="form-stack">
           <label>
             Email
@@ -69,7 +99,7 @@ export function LoginPage() {
             {busy ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-        <Link to="/portal" className="muted-link">Subscriber portal</Link>
+        <Link to={config.crossLinkTo} state={{ from }} className="muted-link">{config.crossLinkLabel}</Link>
       </section>
     </main>
   );

@@ -88,6 +88,76 @@ describe("auth pages", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     await waitFor(() => expect(screen.getByText("Current bill")).toBeInTheDocument());
   });
+
+  it("links from the operator login to the subscriber login", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/auth/refresh")) return Promise.resolve(unauthorized());
+      return Promise.resolve(emptyPage());
+    }));
+    renderRoute("/login");
+    await screen.findByRole("heading", { name: "Generator operations console" });
+    fireEvent.click(screen.getByRole("link", { name: "Subscriber portal" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Ishtirak portal" })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Operator console" })).toHaveAttribute("href", "/login");
+  });
+
+  it("logs in on the subscriber surface and redirects to the portal", async () => {
+    let authed = false;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/auth/refresh")) return Promise.resolve(unauthorized());
+      if (url.includes("/api/auth/login")) {
+        authed = true;
+        return Promise.resolve(json({ accessToken: "a", memberships: [{ role: "SUBSCRIBER" }] }));
+      }
+      if (url.includes("/api/me")) return Promise.resolve(authed ? json({ operatorId: "op", role: "SUBSCRIBER", subscriberId: "sub" }) : unauthorized());
+      void init;
+      return Promise.resolve(emptyPage());
+    }));
+    renderRoute("/portal/login");
+    await screen.findByRole("button", { name: "Sign in" });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "sub@ishtirak.local" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "demo-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Sign out/ })).toBeInTheDocument());
+  });
+
+  it("redirects logged-out subscriber deep links to the subscriber login", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/auth/refresh")) return Promise.resolve(unauthorized());
+      return Promise.resolve(emptyPage());
+    }));
+    renderRoute("/portal/bill");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Ishtirak portal" })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Operator console" })).toHaveAttribute("href", "/login");
+  });
+
+  it("forwards the return-to target when switching login surfaces", async () => {
+    let authed = false;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/auth/refresh")) return Promise.resolve(unauthorized());
+      if (url.includes("/api/auth/login")) {
+        authed = true;
+        return Promise.resolve(json({ accessToken: "a", memberships: [{ role: "SUBSCRIBER" }] }));
+      }
+      if (url.includes("/api/me")) return Promise.resolve(authed ? json({ operatorId: "op", role: "SUBSCRIBER", subscriberId: "sub" }) : unauthorized());
+      void init;
+      return Promise.resolve(emptyPage());
+    }));
+    // Deep-link a logged-out subscriber to the outage page → bounced to the subscriber login with from=/portal/outage.
+    renderRoute("/portal/outage");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Ishtirak portal" })).toBeInTheDocument());
+    // Switch to the operator surface; `from` must survive this navigation to be honored after sign-in.
+    fireEvent.click(screen.getByRole("link", { name: "Operator console" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Generator operations console" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "demo-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    // Honoring `from` returns the subscriber to the outage page, not the default bill page.
+    await waitFor(() => expect(screen.getByText("Countdown")).toBeInTheDocument());
+  });
 });
 
 describe("dashboard and portal components", () => {
@@ -167,7 +237,10 @@ describe("dashboard and portal components", () => {
   });
 
   it("renders an outage countdown snapshot", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json([{ id: "o", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 5000).toISOString(), reason: "FUEL" }])));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({
+      data: [{ id: "o", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 5000).toISOString(), reason: "FUEL" }],
+      meta: { total: 1, page: 1, limit: 100 },
+    })));
     render(<OutageCountdown />);
     await waitFor(() => expect(screen.getByText("Countdown")).toBeInTheDocument());
     expect(screen.getAllByText(/:/).length).toBeGreaterThan(0);

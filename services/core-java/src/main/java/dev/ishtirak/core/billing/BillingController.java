@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,9 +46,22 @@ public class BillingController {
         identity.requireAdmin();
         List<Invoice> invoices = billingService.runBilling(
                 identity.operatorId(), request.periodStart(), request.periodEnd(), idempotencyKey);
-        int issued = (int) invoices.stream().filter(invoice -> invoice.status() == InvoiceStatus.ISSUED).count();
+        List<Invoice> issuedInvoices = invoices.stream()
+                .filter(invoice -> invoice.status() == InvoiceStatus.ISSUED)
+                .toList();
         int needsReview = (int) invoices.stream().filter(invoice -> invoice.status() == InvoiceStatus.NEEDS_REVIEW).count();
-        return new BillingRunResponse(issued, needsReview, request.periodStart(), request.periodEnd());
+        Map<UUID, String> subscriberNames = billingService.subscriberNamesByIds(
+                identity.operatorId(), issuedInvoices.stream().map(Invoice::subscriberId).toList());
+        List<IssuedInvoiceSummary> summaries = issuedInvoices.stream()
+                .map(invoice -> new IssuedInvoiceSummary(
+                        invoice.id(),
+                        invoice.subscriberId(),
+                        subscriberNames.getOrDefault(invoice.subscriberId(), "Unknown subscriber"),
+                        invoice.amountUsd(),
+                        invoice.amountLbp()))
+                .sorted(java.util.Comparator.comparing(IssuedInvoiceSummary::subscriberName))
+                .toList();
+        return new BillingRunResponse(issuedInvoices.size(), needsReview, request.periodStart(), request.periodEnd(), summaries);
     }
 
     @PostMapping("/invoices/{id}/reissue")
@@ -66,9 +80,13 @@ public class BillingController {
     PageResponse<InvoiceResponse> listInvoices(
             RequestIdentity identity,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) InvoiceStatus status,
+            @RequestParam(required = false) LocalDate periodStart,
+            @RequestParam(required = false) LocalDate periodEnd) {
         identity.requireStaffOrAdmin();
-        return PageResponse.of(billingService.listInvoices(identity.operatorId()), page, limit)
+        return PageResponse.of(
+                billingService.listInvoices(identity.operatorId(), status, periodStart, periodEnd), page, limit)
                 .map(InvoiceResponse::from);
     }
 
@@ -129,7 +147,16 @@ public class BillingController {
             int issuedCount,
             int needsReviewCount,
             LocalDate periodStart,
-            LocalDate periodEnd) {
+            LocalDate periodEnd,
+            List<IssuedInvoiceSummary> invoices) {
+    }
+
+    public record IssuedInvoiceSummary(
+            UUID id,
+            UUID subscriberId,
+            String subscriberName,
+            BigDecimal amountUsd,
+            long amountLbp) {
     }
 
     public record RecordPaymentRequest(

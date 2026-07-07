@@ -39,6 +39,8 @@ public interface Repositories {
         Optional<SubscriberEntity> findByOperatorIdAndMeterId(UUID operatorId, String meterId);
         List<SubscriberEntity> findByOperatorId(UUID operatorId);
         List<SubscriberEntity> findByOperatorIdAndStatus(UUID operatorId, ResourceStatus status);
+        List<SubscriberEntity> findByOperatorIdAndNameContainingIgnoreCase(UUID operatorId, String name);
+        List<SubscriberEntity> findByOperatorIdAndIdIn(UUID operatorId, List<UUID> ids);
 
         @Lock(LockModeType.PESSIMISTIC_WRITE)
         @Query("select s from SubscriberEntity s where s.operatorId = :operatorId and s.id = :id")
@@ -70,6 +72,8 @@ public interface Repositories {
         Optional<InvoiceEntity> lockByOperatorIdAndId(@Param("operatorId") UUID operatorId, @Param("id") UUID id);
 
         List<InvoiceEntity> findByOperatorIdAndStatus(UUID operatorId, InvoiceStatus status);
+        List<InvoiceEntity> findByOperatorIdAndPeriodStartAndPeriodEnd(
+                UUID operatorId, LocalDate periodStart, LocalDate periodEnd);
     }
 
     interface Payments extends JpaRepository<PaymentEntity, UUID> {

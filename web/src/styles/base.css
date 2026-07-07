@@ -28,7 +28,7 @@ h2,
 h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 560;
+  font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.01em;
 }
@@ -57,7 +57,8 @@ textarea {
   font-family: var(--font-body);
 }
 
-button {
+button,
+.btn {
   min-height: 40px;
   padding: 0 16px;
   border: 1px solid transparent;
@@ -73,15 +74,18 @@ button {
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
 }
 
-button:hover {
+button:hover,
+.btn:hover {
   background: var(--green-deep);
 }
 
-button:active {
+button:active,
+.btn:active {
   transform: translateY(1px);
 }
 
-button:disabled {
+button:disabled,
+.btn:disabled {
   cursor: wait;
   opacity: 0.65;
 }

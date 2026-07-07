@@ -5,13 +5,13 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { useCountdown, type CountdownSeed } from "../hooks/useCountdown";
 import { useFetch } from "../hooks/useFetch";
 import { formatDateTime, secondsToClock } from "../lib/format";
-import type { Outage, WsEvent } from "../lib/types";
+import type { Outage, Paginated, WsEvent } from "../lib/types";
 
 export function OutageCountdown() {
-  const outages = useFetch<readonly Outage[]>("/outages");
+  const outages = useFetch<Paginated<Outage>>("/outages?limit=100");
   const snapshotSeed = useMemo(() => {
     const now = Date.now();
-    const active = (outages.data ?? []).find((outage) => new Date(outage.endsAt).getTime() > now);
+    const active = (outages.data?.data ?? []).find((outage) => new Date(outage.endsAt).getTime() > now);
     return active ? { startsAt: active.startsAt, endsAt: active.endsAt } : null;
   }, [outages.data]);
   const [liveSeed, setLiveSeed] = useState<CountdownSeed | null>(null);

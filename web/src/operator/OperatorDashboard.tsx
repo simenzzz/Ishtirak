@@ -5,6 +5,7 @@ import { useAuth } from "../auth/useAuth";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { LiveDot } from "../components/ui/LiveDot";
+import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { WsEvent } from "../lib/types";
 
@@ -26,12 +27,13 @@ export function OperatorDashboard() {
 
   return (
     <main className="app-shell">
+      <a href="#main-content" className="skip-link">Skip to content</a>
       <aside className="sidebar">
         <div className="brand">
           <p className="eyebrow">Operator</p>
           <h1>Ishtirak</h1>
         </div>
-        <nav className="nav">
+        <nav className="nav" aria-label="Operator navigation">
           {links.map(([to, label, Icon]) => (
             <NavLink key={to} to={to}>
               <Icon aria-hidden />
@@ -42,13 +44,16 @@ export function OperatorDashboard() {
         <Card className="session-card">
           <strong>{identity?.name ?? identity?.role}</strong>
           <LiveDot on={connected}>{connected ? "Live alerts connected" : "Reconnecting alerts"}</LiveDot>
-          <Button variant="ghost" onClick={logout}>
-            <LogOut size={16} aria-hidden />
-            Sign out
-          </Button>
+          <div className="session-card__actions">
+            <ThemeToggle />
+            <Button variant="ghost" onClick={logout}>
+              <LogOut size={16} aria-hidden />
+              Sign out
+            </Button>
+          </div>
         </Card>
       </aside>
-      <section className="workspace">
+      <section className="workspace" id="main-content">
         <Outlet />
       </section>
     </main>

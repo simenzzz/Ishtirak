@@ -8,12 +8,14 @@ import {
   billingRunBodySchema,
   createSubscriberBodySchema,
   deviceMintBodySchema,
+  invoiceQuerySchema,
   outageBodySchema,
   pageQuerySchema,
   patchSubscriberBodySchema,
   patchTierBodySchema,
   paymentBodySchema,
   recordReadingBodySchema,
+  subscriberQuerySchema,
   tierBodySchema,
   uuidParamSchema,
 } from "./validation.js";
@@ -26,7 +28,7 @@ export function registerCoreRoutes(router: Router, config: Config): void {
   const core = (path: string) => (req: Request) =>
     path.replace(":id", String(req.params["id"] ?? ""));
 
-  router.get("/subscribers", staff, forwardToCore(config, "/subscribers", { querySchema: pageQuerySchema }));
+  router.get("/subscribers", staff, forwardToCore(config, "/subscribers", { querySchema: subscriberQuerySchema }));
   router.post(
     "/subscribers",
     admin,
@@ -50,7 +52,7 @@ export function registerCoreRoutes(router: Router, config: Config): void {
     querySchema: pageQuerySchema,
   }));
 
-  router.get("/tiers", staff, forwardToCore(config, "/tiers"));
+  router.get("/tiers", staff, forwardToCore(config, "/tiers", { querySchema: pageQuerySchema }));
   router.post("/tiers", admin, forwardToCore(config, "/tiers", { bodySchema: tierBodySchema }));
   router.get("/tiers/:id", staff, forwardToCore(config, core("/tiers/:id"), { paramSchema: uuidParamSchema }));
   router.patch(
@@ -65,7 +67,7 @@ export function registerCoreRoutes(router: Router, config: Config): void {
     admin,
     forwardToCore(config, "/billing-runs", { bodySchema: billingRunBodySchema }),
   );
-  router.get("/invoices", staff, forwardToCore(config, "/invoices", { querySchema: pageQuerySchema }));
+  router.get("/invoices", staff, forwardToCore(config, "/invoices", { querySchema: invoiceQuerySchema }));
   router.get("/invoices/:id", staff, forwardToCore(config, core("/invoices/:id"), { paramSchema: uuidParamSchema }));
   router.post(
     "/invoices/:id/reissue",
@@ -97,7 +99,7 @@ export function registerCoreRoutes(router: Router, config: Config): void {
     forwardToCore(config, core("/me/invoices/:id/payments"), { paramSchema: uuidParamSchema }),
   );
 
-  router.get("/outages", forwardToCore(config, "/outages"));
+  router.get("/outages", forwardToCore(config, "/outages", { querySchema: pageQuerySchema }));
   router.post("/outages", admin, forwardToCore(config, "/outages", { bodySchema: outageBodySchema }));
 
   // Device credentials for generator-site edge agents (the ingest path itself is

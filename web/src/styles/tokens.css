@@ -62,3 +62,76 @@
   /* Brass focus ring */
   --focus-ring: 0 0 0 3px rgb(194 135 59 / 35%);
 }
+
+/* Dark theme — same brand hues (green + brass), inverted surfaces. Applies when the
+   system prefers dark and the user hasn't explicitly chosen light, or when the user
+   explicitly picked dark via the theme toggle (data-theme, persisted by useTheme). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171d1a;
+    --surface: #1f2621;
+    --surface-sunk: #262f29;
+    --hairline: #333d36;
+    --hairline-strong: #445048;
+    --ink: #e9e6dc;
+    --ink-muted: #9aa39c;
+
+    --green: #4b8d78;
+    --green-deep: #5fa78f;
+    --green-tint: #1e2b26;
+
+    --brass: #d9a35c;
+    --brass-ink: #f1cf95;
+    --brass-soft: #3a2f1c;
+    --brass-line: #5a4626;
+
+    --ok: #4caf7d;
+    --ok-soft: #16281f;
+    --warn: #d9a94a;
+    --warn-soft: #2e2716;
+    --alert: #e2695a;
+    --alert-deep: #c94e3f;
+    --alert-soft: #331c18;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 25%), 0 1px 1px rgb(0 0 0 / 18%);
+    --shadow-md: 0 6px 16px rgb(0 0 0 / 32%);
+    --shadow-lg: 0 24px 60px rgb(0 0 0 / 45%);
+    --focus-ring: 0 0 0 3px rgb(217 163 92 / 40%);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #171d1a;
+  --surface: #1f2621;
+  --surface-sunk: #262f29;
+  --hairline: #333d36;
+  --hairline-strong: #445048;
+  --ink: #e9e6dc;
+  --ink-muted: #9aa39c;
+
+  --green: #4b8d78;
+  --green-deep: #5fa78f;
+  --green-tint: #1e2b26;
+
+  --brass: #d9a35c;
+  --brass-ink: #f1cf95;
+  --brass-soft: #3a2f1c;
+  --brass-line: #5a4626;
+
+  --ok: #4caf7d;
+  --ok-soft: #16281f;
+  --warn: #d9a94a;
+  --warn-soft: #2e2716;
+  --alert: #e2695a;
+  --alert-deep: #c94e3f;
+  --alert-soft: #331c18;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 25%), 0 1px 1px rgb(0 0 0 / 18%);
+  --shadow-md: 0 6px 16px rgb(0 0 0 / 32%);
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 45%);
+  --focus-ring: 0 0 0 3px rgb(217 163 92 / 40%);
+
+  color-scheme: dark;
+}

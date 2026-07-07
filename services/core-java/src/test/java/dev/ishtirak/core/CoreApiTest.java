@@ -58,7 +58,25 @@ class CoreApiTest {
                                 {"periodStart":"2026-01-01","periodEnd":"2026-01-31"}
                                 """))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.issuedCount").value(1));
+                .andExpect(jsonPath("$.issuedCount").value(1))
+                .andExpect(jsonPath("$.invoices.length()").value(1))
+                .andExpect(jsonPath("$.invoices[0].subscriberId").value(subscriberId))
+                .andExpect(jsonPath("$.invoices[0].subscriberName").value("Nour"))
+                .andExpect(jsonPath("$.invoices[0].amountUsd").value(17.5));
+
+        mockMvc.perform(get("/invoices")
+                        .headers(headers("OPERATOR_STAFF", null))
+                        .param("periodStart", "2026-01-01")
+                        .param("periodEnd", "2026-01-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(1));
+
+        mockMvc.perform(get("/invoices")
+                        .headers(headers("OPERATOR_STAFF", null))
+                        .param("periodStart", "2026-02-01")
+                        .param("periodEnd", "2026-02-28"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(0));
 
         mockMvc.perform(get("/me/invoices")
                         .headers(headers("SUBSCRIBER", subscriberId)))
@@ -83,6 +101,29 @@ class CoreApiTest {
                 .andExpect(jsonPath("$.operatorId").doesNotExist())
                 .andExpect(jsonPath("$.appliedUsd").value(5.0))
                 .andExpect(jsonPath("$.appliedLbp").value(450000));
+    }
+
+    @Test
+    void billingRunResponseInvoicesExcludeNeedsReview() throws Exception {
+        String tierId = createTier();
+        String cleanSubscriberId = createSubscriber(tierId, "Nour", "M-1");
+        String heldSubscriberId = createSubscriber(tierId, "Rami", "M-2");
+        recordReading(cleanSubscriberId, "10", "2026-01-01T12:00:00Z");
+        recordReading(cleanSubscriberId, "20", "2026-01-31T12:00:00Z");
+        recordReading(heldSubscriberId, "25", "2026-01-31T12:00:00Z");
+
+        mockMvc.perform(post("/billing-runs")
+                        .headers(headers("OPERATOR_ADMIN", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"periodStart":"2026-01-01","periodEnd":"2026-01-31"}
+                                """))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.issuedCount").value(1))
+                .andExpect(jsonPath("$.needsReviewCount").value(1))
+                .andExpect(jsonPath("$.invoices.length()").value(1))
+                .andExpect(jsonPath("$.invoices[0].subscriberId").value(cleanSubscriberId))
+                .andExpect(jsonPath("$.invoices[0].subscriberName").value("Nour"));
     }
 
     @Test
@@ -213,12 +254,16 @@ class CoreApiTest {
         return idFrom(result);
     }
     private String createSubscriber(String tierId) throws Exception {
+        return createSubscriber(tierId, "Nour", "M-1");
+    }
+
+    private String createSubscriber(String tierId, String name, String meterId) throws Exception {
         MvcResult result = mockMvc.perform(post("/subscribers")
                         .headers(headers("OPERATOR_ADMIN", null))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Nour","tierId":"%s","meterId":"M-1"}
-                """.formatted(tierId)))
+                                {"name":"%s","tierId":"%s","meterId":"%s"}
+                """.formatted(name, tierId, meterId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.operatorId").doesNotExist())
                 .andReturn();

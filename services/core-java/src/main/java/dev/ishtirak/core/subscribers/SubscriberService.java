@@ -33,6 +33,15 @@ public class SubscriberService {
         return subscribers.findByOperatorId(operatorId).stream().map(SubscriberEntity::toDomain).toList();
     }
 
+    public List<Subscriber> list(UUID operatorId, String search) {
+        if (search == null || search.isBlank()) {
+            return list(operatorId);
+        }
+        return subscribers.findByOperatorIdAndNameContainingIgnoreCase(operatorId, search.trim()).stream()
+                .map(SubscriberEntity::toDomain)
+                .toList();
+    }
+
     public Subscriber get(UUID operatorId, UUID subscriberId) {
         return subscribers.findByOperatorIdAndId(operatorId, subscriberId)
                 .map(SubscriberEntity::toDomain)

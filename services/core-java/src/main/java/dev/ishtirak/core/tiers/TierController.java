@@ -1,11 +1,11 @@
 package dev.ishtirak.core.tiers;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.ishtirak.core.common.PageResponse;
 import dev.ishtirak.core.domain.TariffPolicy;
 import dev.ishtirak.core.domain.Tier;
 import dev.ishtirak.core.security.RequestIdentity;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,12 +26,14 @@ public class TierController {
     }
 
     @GetMapping("/tiers")
-    List<TierResponse> list(RequestIdentity identity) {
+    PageResponse<TierResponse> list(
+            RequestIdentity identity,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int limit) {
         identity.requireStaffOrAdmin();
         TariffPolicy defaultPolicy = tierService.defaultPolicy(identity.operatorId());
-        return tierService.list(identity.operatorId()).stream()
-                .map(tier -> TierResponse.from(tier, defaultPolicy))
-                .toList();
+        return PageResponse.of(tierService.list(identity.operatorId()), page, limit)
+                .map(tier -> TierResponse.from(tier, defaultPolicy));
     }
 
     @GetMapping("/tiers/{id}")

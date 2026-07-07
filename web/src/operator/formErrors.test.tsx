@@ -24,7 +24,7 @@ describe("operator form error handling", () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/me")) return Promise.resolve(json({ operatorId: "op", role: "OPERATOR_ADMIN", name: "Admin" }));
-      if (url.includes("/api/tiers")) return Promise.resolve(json([tier]));
+      if (url.includes("/api/tiers")) return Promise.resolve(json({ data: [tier], meta: { total: 1, page: 1, limit: 100 } }));
       if (url.includes("/api/subscribers") && init?.method === "POST") {
         return Promise.resolve(json({ error: { code: "CONFLICT", message: "Meter already in use" } }, 409));
       }
@@ -36,7 +36,7 @@ describe("operator form error handling", () => {
       </MemoryRouter>,
     );
     await screen.findByText("Customer ledger");
-    fireEvent.change(screen.getByPlaceholderText("Subscriber name"), { target: { value: "Maya" } });
+    fireEvent.change(screen.getByLabelText("Subscriber name"), { target: { value: "Maya" } });
     fireEvent.change(screen.getByRole("combobox"), { target: { value: tier.id } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByText("Meter already in use");

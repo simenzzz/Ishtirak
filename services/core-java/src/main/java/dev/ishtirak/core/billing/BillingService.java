@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +111,38 @@ public class BillingService {
 
     public List<Invoice> listInvoices(UUID operatorId) {
         return invoices.findByOperatorId(operatorId).stream().map(InvoiceEntity::toDomain).toList();
+    }
+
+    public List<Invoice> listInvoices(UUID operatorId, InvoiceStatus status) {
+        if (status == null) {
+            return listInvoices(operatorId);
+        }
+        return invoices.findByOperatorIdAndStatus(operatorId, status).stream().map(InvoiceEntity::toDomain).toList();
+    }
+
+    public List<Invoice> listInvoices(
+            UUID operatorId, InvoiceStatus status, LocalDate periodStart, LocalDate periodEnd) {
+        if (periodStart == null || periodEnd == null) {
+            return listInvoices(operatorId, status);
+        }
+        List<Invoice> forPeriod = invoices.findByOperatorIdAndPeriodStartAndPeriodEnd(operatorId, periodStart, periodEnd)
+                .stream()
+                .map(InvoiceEntity::toDomain)
+                .toList();
+        if (status == null) {
+            return forPeriod;
+        }
+        return forPeriod.stream().filter(invoice -> invoice.status() == status).toList();
+    }
+
+    /** Batch subscriber-name lookup, scoped to the operator, for enriching billing-run results. */
+    public Map<UUID, String> subscriberNamesByIds(UUID operatorId, Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return subscribers.findByOperatorIdAndIdIn(operatorId, ids.stream().toList()).stream()
+                .map(SubscriberEntity::toDomain)
+                .collect(java.util.stream.Collectors.toMap(Subscriber::id, Subscriber::name));
     }
 
     public Invoice getInvoice(UUID operatorId, UUID invoiceId) {

@@ -100,6 +100,16 @@ export const analyticsRiskQuerySchema = pageQuerySchema.extend({
   minScore: z.coerce.number().min(0).max(1).optional(),
 });
 
+export const subscriberQuerySchema = pageQuerySchema.extend({
+  search: z.string().min(1).max(200).optional(),
+});
+
+export const invoiceQuerySchema = pageQuerySchema.extend({
+  status: z.enum(["ISSUED", "PARTIAL", "PAID", "NEEDS_REVIEW", "VOID"]).optional(),
+  periodStart: z.string().date().optional(),
+  periodEnd: z.string().date().optional(),
+});
+
 export const analyticsCollectionQuerySchema = z
   .object({
     periodStart: z.string().optional(),

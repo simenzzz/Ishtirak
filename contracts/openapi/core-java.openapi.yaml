@@ -628,12 +628,16 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [issuedCount, needsReviewCount, periodStart, periodEnd]
+                required: [issuedCount, needsReviewCount, periodStart, periodEnd, invoices]
                 properties:
                   issuedCount: { type: integer, minimum: 0, description: Number of payable ISSUED invoices. }
                   needsReviewCount: { type: integer, minimum: 0, description: Number of invoices held for operator review. }
                   periodStart: { type: string, format: date }
                   periodEnd: { type: string, format: date }
+                  invoices:
+                    type: array
+                    description: The ISSUED invoices from this run, sorted by subscriber name.
+                    items: { $ref: 'components.yaml#/components/schemas/IssuedInvoiceSummary' }
         '400': { $ref: 'components.yaml#/components/responses/BadRequest' }
         '401': { $ref: 'components.yaml#/components/responses/Unauthorized' }
         '409': { $ref: 'components.yaml#/components/responses/Conflict' }
@@ -647,11 +651,13 @@ paths:
       operationId: listInvoices
       summary: List invoices for the operator
       description: >
-        Returns all invoices for the caller's operator. Period/status query
-        filtering is a planned gateway/dashboard read concern (Phase 4-5) and is
-        not yet implemented here.
+        Returns invoices for the caller's operator, optionally filtered by
+        status and/or billing period.
       x-status: built
       parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [ISSUED, PARTIAL, PAID, VOID, NEEDS_REVIEW] } }
+        - { name: periodStart, in: query, required: false, schema: { type: string, format: date } }
+        - { name: periodEnd, in: query, required: false, schema: { type: string, format: date } }
         - $ref: 'components.yaml#/components/parameters/pageParam'
         - $ref: 'components.yaml#/components/parameters/limitParam'
       responses:

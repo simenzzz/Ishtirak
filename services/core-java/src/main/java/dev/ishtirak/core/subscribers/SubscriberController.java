@@ -29,9 +29,10 @@ public class SubscriberController {
     PageResponse<SubscriberResponse> list(
             RequestIdentity identity,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String search) {
         identity.requireStaffOrAdmin();
-        return PageResponse.of(subscriberService.list(identity.operatorId()), page, limit)
+        return PageResponse.of(subscriberService.list(identity.operatorId(), search), page, limit)
                 .map(SubscriberResponse::from);
     }
 

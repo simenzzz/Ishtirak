@@ -32,6 +32,30 @@ thead th {
   text-align: left;
 }
 
+.sortable-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sortable-th:hover {
+  color: var(--ink);
+  background: transparent;
+}
+
+.sortable-th svg {
+  opacity: 0.7;
+}
+
 tbody td {
   padding: 13px 16px;
   border-bottom: 1px solid var(--hairline);
@@ -138,6 +162,66 @@ td a:hover {
   100% {
     box-shadow: 0 0 0 0 rgb(30 107 67 / 0%);
   }
+}
+
+/* Responsive: below phone width, rows become cards instead of a scrolling table. */
+@media (max-width: 640px) {
+  .data-table table,
+  .data-table thead,
+  .data-table tbody,
+  .data-table th,
+  .data-table td,
+  .data-table tr {
+    display: block;
+  }
+
+  .data-table {
+    overflow-x: visible;
+  }
+
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .data-table tbody tr {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .data-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .data-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 6px 4px;
+    border-bottom: none;
+    text-align: right;
+  }
+
+  .data-table td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+  }
+}
+
+.sparkline {
+  color: var(--brass);
+  overflow: visible;
 }
 
 /* Live tampering strip */
