@@ -36,6 +36,10 @@ describe("operator form error handling", () => {
       </MemoryRouter>,
     );
     await screen.findByText("Customer ledger");
+    // Wait for the async /tiers fetch to populate the tier <option> before touching
+    // the select; otherwise the value never sticks and submit short-circuits on
+    // client-side "Name and tier are required." validation (CI-timing flake).
+    await screen.findByRole("option", { name: tier.name });
     fireEvent.change(screen.getByLabelText("Subscriber name"), { target: { value: "Maya" } });
     fireEvent.change(screen.getByRole("combobox"), { target: { value: tier.id } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));

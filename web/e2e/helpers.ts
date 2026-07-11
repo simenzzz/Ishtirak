@@ -27,7 +27,7 @@ export async function login(page: Page, email: string, landingPath: RegExp): Pro
 /** Record a meter reading for a subscriber via the operator Readings form. */
 export async function recordReading(page: Page, subscriberId: string, kwh: number): Promise<void> {
   await page.goto("/operator/readings");
-  await page.getByPlaceholder("Subscriber ID").fill(subscriberId);
-  await page.getByPlaceholder("kWh").fill(String(kwh));
+  await page.getByLabel("Subscriber ID").fill(subscriberId);
+  await page.getByLabel("kWh").fill(String(kwh));
   await page.getByRole("button", { name: /record reading/i }).click();
 }
